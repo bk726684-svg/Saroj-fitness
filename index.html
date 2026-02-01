@@ -3,189 +3,338 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saroj Fitness App Preview</title>
+    <title>Saroj Fitness App - Integrated</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
     <style>
+        /* --- BASE STYLES --- */
         body { font-family: 'Inter', sans-serif; background: #1e293b; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
         h1, h2, h3 { font-family: 'Sora', sans-serif; }
         
-        /* Phone Frame */
+        /* --- PHONE FRAME (Code A Design) --- */
         .phone-frame {
-            width: 375px;
-            height: 812px;
-            background: #000;
-            border-radius: 40px;
+            width: 375px; height: 812px;
+            background: #000; border-radius: 40px;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             border: 12px solid #1f2937;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            position: relative; overflow: hidden;
+            display: flex; flex-direction: column;
         }
-
-        /* Notch */
         .notch {
-            position: absolute;
-            top: 0; left: 50%;
-            transform: translateX(-50%);
-            width: 150px; height: 30px;
-            background: #1f2937;
-            border-bottom-left-radius: 16px;
-            border-bottom-right-radius: 16px;
-            z-index: 50;
+            position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 150px; height: 30px; background: #1f2937;
+            border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; z-index: 50;
         }
 
-        /* App Background */
+        /* --- INTERNAL APP STYLES --- */
         .app-bg {
-            flex: 1;
-            background: linear-gradient(135deg, #0f172a, #1e1b4b);
-            position: relative;
-            overflow-y: auto;
-            color: white;
-            padding-bottom: 80px; /* Space for navbar */
+            flex: 1; background: linear-gradient(135deg, #0f172a, #1e1b4b);
+            position: relative; overflow-y: auto; color: white;
+            padding-bottom: 90px; /* Space for navbar */
         }
-
-        .orb {
-            position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.4;
-        }
+        .orb { position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.4; pointer-events: none; }
         .orb-1 { top: 10%; left: -20px; width: 200px; height: 200px; background: #10b981; }
         .orb-2 { top: 30%; right: -50px; width: 150px; height: 150px; background: #3b82f6; }
         .orb-3 { bottom: 20%; left: 20%; width: 180px; height: 180px; background: #8b5cf6; }
 
         .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px;
         }
-
         .gradient-text {
             background: linear-gradient(to right, #34d399, #3b82f6);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
 
-        /* Hide Scrollbar */
-        ::-webkit-scrollbar { width: 0px; background: transparent; }
-
-        /* Bottom Nav */
+        /* --- NAVIGATION --- */
         .bottom-nav {
             position: absolute; bottom: 0; width: 100%; height: 80px;
-            background: rgba(15, 23, 42, 0.95);
-            backdrop-filter: blur(20px);
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px);
             border-top: 1px solid rgba(255,255,255,0.1);
-            display: flex; justify-content: space-around;
-            align-items: center; padding-bottom: 20px;
-            z-index: 40;
+            display: flex; justify-content: space-around; align-items: center;
+            padding-bottom: 10px; z-index: 40;
         }
         .nav-item { display: flex; flex-direction: column; align-items: center; color: #64748b; font-size: 10px; gap: 4px; cursor: pointer; transition: 0.3s; }
         .nav-item.active { color: #10b981; transform: translateY(-2px); }
         .nav-item i { font-size: 20px; }
+
+        /* --- UTILS --- */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+        .loader { border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid #10b981; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* PDF Hidden Container */
+        #pdf-hidden { position: fixed; left: -9999px; top: 0; background: white; width: 210mm; min-height: 297mm; z-index: 10000; color: #000; }
     </style>
 </head>
 <body>
 
-    <div class="phone-frame">
-        <div class="notch"></div>
-        
-        <!-- App Content -->
-        <div class="app-bg">
-            <!-- Header -->
-            <div class="p-6 pt-12 flex justify-between items-center">
-                <div>
-                    <p class="text-xs text-slate-400">Welcome Back,</p>
-                    <h2 class="text-xl font-bold">Saroj Fitness</h2>
-                </div>
-                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-lg">
-                    <i class="fa-solid fa-user"></i>
-                </div>
-            </div>
+    <div id="root"></div>
 
-            <!-- Hero -->
-            <div class="px-6 mb-6 relative z-10">
-                <div class="glass p-6 rounded-2xl relative overflow-hidden">
-                    <div class="absolute top-0 right-0 w-24 h-24 bg-emerald-500 rounded-full filter blur-2xl opacity-20"></div>
-                    <h1 class="text-2xl font-bold mb-2 leading-tight">Train Like a <span class="gradient-text">Champion</span></h1>
-                    <p class="text-xs text-slate-300 mb-4">Transform your body with AI-driven plans.</p>
-                    <button class="bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg">
-                        Start Now <i class="fa-solid fa-arrow-right ml-1"></i>
-                    </button>
-                </div>
-            </div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const SHEETDB_URL = 'https://sheetdb.io/api/v1/fi4eegqr9v38e'; // Your API Key
 
-            <!-- Services Grid -->
-            <div class="px-6 mb-6">
-                <div class="flex justify-between items-end mb-3">
-                    <h3 class="font-bold text-lg">Services</h3>
-                    <span class="text-xs text-emerald-400">See All</span>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="glass p-4 rounded-xl flex flex-col items-center text-center hover:bg-white/10 transition">
-                        <div class="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mb-2"><i class="fa-solid fa-spa"></i></div>
-                        <span class="text-xs font-bold">Yoga</span>
-                    </div>
-                    <div class="glass p-4 rounded-xl flex flex-col items-center text-center hover:bg-white/10 transition">
-                        <div class="w-10 h-10 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center mb-2"><i class="fa-solid fa-fire"></i></div>
-                        <span class="text-xs font-bold">Weight Loss</span>
-                    </div>
-                    <div class="glass p-4 rounded-xl flex flex-col items-center text-center hover:bg-white/10 transition">
-                        <div class="w-10 h-10 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center mb-2"><i class="fa-solid fa-leaf"></i></div>
-                        <span class="text-xs font-bold">Ayurveda</span>
-                    </div>
-                    <div class="glass p-4 rounded-xl flex flex-col items-center text-center hover:bg-white/10 transition">
-                        <div class="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mb-2"><i class="fa-solid fa-heart-pulse"></i></div>
-                        <span class="text-xs font-bold">BMI Check</span>
-                    </div>
-                </div>
-            </div>
+        // --- COMPONENTS FROM CODE B (Logic) Adapted for Mobile ---
 
-            <!-- Stats -->
-            <div class="px-6">
-                <h3 class="font-bold text-lg mb-3">Your Progress</h3>
-                <div class="glass p-4 rounded-xl flex items-center gap-4">
-                    <div class="relative w-16 h-16 flex items-center justify-center">
-                        <svg class="transform -rotate-90 w-16 h-16">
-                            <circle cx="32" cy="32" r="28" stroke="rgba(255,255,255,0.1)" stroke-width="6" fill="transparent" />
-                            <circle cx="32" cy="32" r="28" stroke="#10b981" stroke-width="6" fill="transparent" stroke-dasharray="175" stroke-dashoffset="40" />
-                        </svg>
-                        <span class="absolute text-xs font-bold">78%</span>
+        // 1. DIET PLANNER COMPONENT
+        const DietPlanner = () => {
+            const [step, setStep] = useState(1);
+            const [loading, setLoading] = useState(false);
+            const [data, setData] = useState({ name: '', goal: 'Weight Loss', type: 'Vegetarian' });
+            const [plan, setPlan] = useState(null);
+
+            const generate = async () => {
+                if(!data.name) return alert("Enter Name");
+                setLoading(true);
+                // Simplified Logic for Demo
+                setTimeout(() => {
+                    let diet = {
+                        bf: data.type === 'Vegetarian' ? "🥣 Oats & Almonds" : "🍳 Boiled Eggs",
+                        lunch: "🥗 Roti + Dal + Salad",
+                        dinner: "🍲 Soup + Papaya"
+                    };
+                    setPlan(diet);
+                    setStep(2);
+                    setLoading(false);
+                }, 1500);
+            };
+
+            return (
+                <div className="glass p-5 mb-6">
+                    <h3 className="font-bold text-lg mb-2"><i className="fa-solid fa-robot text-emerald-400 mr-2"></i>AI Diet Planner</h3>
+                    
+                    {step === 1 ? (
+                        <div className="space-y-3">
+                            <input className="w-full bg-white/10 p-3 rounded-lg text-xs text-white outline-none" placeholder="Your Name" onChange={e => setData({...data, name: e.target.value})} />
+                            <select className="w-full bg-white/10 p-3 rounded-lg text-xs text-white outline-none" onChange={e => setData({...data, goal: e.target.value})}>
+                                <option>Weight Loss</option><option>Muscle Gain</option>
+                            </select>
+                            <button onClick={generate} className="w-full bg-emerald-500 py-3 rounded-lg text-xs font-bold shadow-lg mt-2">
+                                {loading ? "Generating..." : "Create Plan"}
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="text-xs space-y-3">
+                            <div className="bg-white/5 p-3 rounded-lg"><b className="text-emerald-400">Breakfast:</b> {plan.bf}</div>
+                            <div className="bg-white/5 p-3 rounded-lg"><b className="text-emerald-400">Lunch:</b> {plan.lunch}</div>
+                            <div className="bg-white/5 p-3 rounded-lg"><b className="text-emerald-400">Dinner:</b> {plan.dinner}</div>
+                            <button onClick={() => setStep(1)} className="text-slate-400 underline w-full text-center">Reset</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 2. BMI CALCULATOR COMPONENT
+        const BMICalculator = () => {
+            const [d, setD] = useState({ weight: '', height: '', name: 'User' });
+            const [res, setRes] = useState(null);
+
+            const calc = () => {
+                if(!d.weight || !d.height) return;
+                const h = d.height/100;
+                const bmi = (d.weight / (h*h)).toFixed(1);
+                setRes({ bmi, cat: bmi < 25 ? 'Normal' : 'Overweight' });
+            };
+
+            const downloadPDF = () => {
+                const input = document.getElementById('pdf-hidden');
+                // Fill PDF content
+                input.innerHTML = `
+                    <div style="padding: 40px; font-family: sans-serif;">
+                        <h1 style="color: #10b981;">Saroj Fitness Report</h1>
+                        <hr>
+                        <h2>Name: ${d.name}</h2>
+                        <h3>BMI Score: ${res.bmi}</h3>
+                        <h3>Status: ${res.cat}</h3>
+                        <p>Generated via Saroj App</p>
                     </div>
-                    <div>
-                        <p class="text-xs text-slate-400">Weekly Goal</p>
-                        <p class="text-sm font-bold">5/7 Workouts</p>
-                        <div class="text-[10px] text-emerald-400 mt-1">Keep it up!</div>
+                `;
+                input.style.left = "0";
+                html2canvas(input).then(canvas => {
+                    const img = canvas.toDataURL('image/png');
+                    const pdf = new window.jspdf.jsPDF();
+                    pdf.addImage(img, 'PNG', 10, 10, 190, 0);
+                    pdf.save('Saroj_Report.pdf');
+                    input.style.left = "-9999px";
+                });
+            };
+
+            return (
+                <div className="glass p-5 mb-6">
+                    <h3 className="font-bold text-lg mb-2"><i className="fa-solid fa-weight-scale text-blue-400 mr-2"></i>BMI Check</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                        <input type="number" placeholder="Weight (Kg)" className="bg-white/10 p-3 rounded-lg text-xs text-white" onChange={e => setD({...d, weight: e.target.value})} />
+                        <input type="number" placeholder="Height (cm)" className="bg-white/10 p-3 rounded-lg text-xs text-white" onChange={e => setD({...d, height: e.target.value})} />
+                    </div>
+                    <button onClick={calc} className="w-full bg-blue-600 py-3 rounded-lg text-xs font-bold shadow-lg mb-3">Calculate</button>
+                    
+                    {res && (
+                        <div className="text-center bg-white/5 p-3 rounded-lg">
+                            <div className="text-3xl font-bold gradient-text">{res.bmi}</div>
+                            <div className="text-xs text-slate-300 mb-2">{res.cat}</div>
+                            <button onClick={downloadPDF} className="text-red-400 text-xs font-bold border border-red-400/30 px-3 py-1 rounded-full">Download PDF</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 3. STORE COMPONENT
+        const Store = () => {
+            const items = [
+                { name: "Spirulina", price: "₹503", icon: "🌿", color: "bg-green-500" },
+                { name: "Flax Oil", price: "₹756", icon: "❤️", color: "bg-red-500" },
+                { name: "Protein", price: "₹2327", icon: "🥤", color: "bg-purple-500" },
+            ];
+            return (
+                <div className="mb-6">
+                    <h3 className="font-bold text-lg mb-3 px-1">Store</h3>
+                    <div className="flex gap-4 overflow-x-auto pb-4" style={{scrollbarWidth:'none'}}>
+                        {items.map((i, idx) => (
+                            <div key={idx} className="glass min-w-[140px] p-4 flex flex-col items-center rounded-2xl">
+                                <div className={`w-12 h-12 rounded-full ${i.color}/20 flex items-center justify-center text-2xl mb-2`}>{i.icon}</div>
+                                <div className="font-bold text-sm">{i.name}</div>
+                                <div className="text-xs text-emerald-400 font-bold mb-2">{i.price}</div>
+                                <button className="bg-white/10 px-3 py-1 rounded text-[10px] hover:bg-emerald-500 transition">Buy</button>
+                            </div>
+                        ))}
                     </div>
                 </div>
-            </div>
-        </div>
+            );
+        }
 
-        <!-- Background Orbs -->
-        <div class="orb orb-1"></div>
-        <div class="orb orb-2"></div>
-        <div class="orb orb-3"></div>
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            // View State: 'welcome' (Code A) or 'dashboard' (Code B logic)
+            const [view, setView] = useState('welcome');
+            const [activeTab, setActiveTab] = useState('home');
 
-        <!-- Navigation Bar -->
-        <div class="bottom-nav">
-            <div class="nav-item active">
-                <i class="fa-solid fa-house"></i>
-                <span>Home</span>
-            </div>
-            <div class="nav-item">
-                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                <span>AI Tools</span>
-            </div>
-            <div class="nav-item">
-                <i class="fa-solid fa-bag-shopping"></i>
-                <span>Store</span>
-            </div>
-            <div class="nav-item">
-                <i class="fa-solid fa-user"></i>
-                <span>Profile</span>
-            </div>
-        </div>
-    </div>
+            // --- WELCOME SCREEN (Code A Design) ---
+            const WelcomeScreen = () => (
+                <div className="px-6 pt-10 h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <p className="text-xs text-slate-400">Welcome Back,</p>
+                            <h2 className="text-xl font-bold">Saroj Fitness</h2>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-lg">
+                            <i className="fa-solid fa-user"></i>
+                        </div>
+                    </div>
+
+                    <div className="glass p-6 rounded-2xl relative overflow-hidden mb-6">
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500 rounded-full filter blur-2xl opacity-20"></div>
+                        <h1 className="text-2xl font-bold mb-2 leading-tight">Train Like a <span className="gradient-text">Champion</span></h1>
+                        <p className="text-xs text-slate-300 mb-4">Transform your body with AI-driven plans.</p>
+                        
+                        {/* THIS BUTTON SWITCHES TO CODE B LOGIC */}
+                        <button onClick={() => setView('dashboard')} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:scale-105 transition">
+                            Start Now <i className="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+
+                    <div className="flex justify-between items-end mb-3">
+                        <h3 className="font-bold text-lg">Services</h3>
+                        <span className="text-xs text-emerald-400">See All</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                        {[{n:'Yoga', i:'fa-spa', c:'text-emerald-400', b:'bg-emerald-500/20'}, 
+                          {n:'Weight Loss', i:'fa-fire', c:'text-orange-400', b:'bg-orange-500/20'},
+                          {n:'Ayurveda', i:'fa-leaf', c:'text-purple-400', b:'bg-purple-500/20'},
+                          {n:'BMI Check', i:'fa-heart-pulse', c:'text-blue-400', b:'bg-blue-500/20'}].map((s,i) => (
+                            <div key={i} className="glass p-4 rounded-xl flex flex-col items-center text-center">
+                                <div className={`w-10 h-10 rounded-full ${s.b} ${s.c} flex items-center justify-center mb-2`}><i className={`fa-solid ${s.i}`}></i></div>
+                                <span className="text-xs font-bold">{s.n}</span>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <h3 className="font-bold text-lg mb-3">Your Progress</h3>
+                    <div className="glass p-4 rounded-xl flex items-center gap-4 mb-20">
+                        <div className="relative w-12 h-12 flex items-center justify-center">
+                            <svg className="transform -rotate-90 w-12 h-12">
+                                <circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,0.1)" strokeWidth="4" fill="transparent" />
+                                <circle cx="24" cy="24" r="20" stroke="#10b981" strokeWidth="4" fill="transparent" strokeDasharray="125" strokeDashoffset="30" />
+                            </svg>
+                            <span className="absolute text-[10px] font-bold">78%</span>
+                        </div>
+                        <div>
+                            <p className="text-xs text-slate-400">Weekly Goal</p>
+                            <p className="text-xs font-bold text-emerald-400">Keep it up!</p>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            // --- DASHBOARD SCREEN (Code B Logic inside Phone) ---
+            const DashboardScreen = () => (
+                <div className="px-6 pt-12 pb-24 h-full overflow-y-auto">
+                    <div className="flex items-center gap-2 mb-6 cursor-pointer" onClick={() => setView('welcome')}>
+                        <i className="fa-solid fa-chevron-left text-slate-400"></i>
+                        <h2 className="text-xl font-bold">Tools & Store</h2>
+                    </div>
+
+                    <DietPlanner />
+                    <BMICalculator />
+                    <Store />
+
+                    <div className="glass p-5 rounded-2xl text-center">
+                        <h3 className="font-bold mb-2">Need a Coach?</h3>
+                        <p className="text-xs text-slate-400 mb-4">Contact Saroj directly for personal training.</p>
+                        <a href="https://wa.me/919217225060" className="bg-white/10 px-6 py-2 rounded-full text-xs font-bold"><i className="fa-brands fa-whatsapp mr-2"></i>Chat Now</a>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="phone-frame">
+                    <div className="notch"></div>
+                    
+                    <div className="app-bg">
+                        {/* Background Orbs */}
+                        <div className="orb orb-1"></div>
+                        <div className="orb orb-2"></div>
+                        <div className="orb orb-3"></div>
+
+                        {/* Screen Switcher */}
+                        {view === 'welcome' ? <WelcomeScreen /> : <DashboardScreen />}
+                    </div>
+
+                    {/* Bottom Nav */}
+                    <div className="bottom-nav">
+                        <div className={`nav-item ${view==='welcome'?'active':''}`} onClick={() => setView('welcome')}>
+                            <i className="fa-solid fa-house"></i><span>Home</span>
+                        </div>
+                        <div className={`nav-item ${view==='dashboard'?'active':''}`} onClick={() => setView('dashboard')}>
+                            <i className="fa-solid fa-wand-magic-sparkles"></i><span>AI Tools</span>
+                        </div>
+                        <div className="nav-item">
+                            <i className="fa-solid fa-bag-shopping"></i><span>Store</span>
+                        </div>
+                        <div className="nav-item">
+                            <i className="fa-solid fa-user"></i><span>Profile</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+    
+    <div id="pdf-hidden"></div>
 
 </body>
 </html>
