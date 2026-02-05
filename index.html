@@ -245,4 +245,261 @@
                 <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-end p-4 fade-in" onClick={onClose}>
                     <div className="glass-card w-full max-w-lg rounded-t-3xl p-6 md:p-8 shadow-2xl relative animate-in slide-in-from-bottom-10" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-700"><h3 className="text-xl font-bold text-white">Edit Order #{transaction.id}</h3><button onClick={onClose} className="text-gray-400 hover:text-white transition p-1"><Icon name="x" /></button></div>
-                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">{items.map((item, idx) => (<div key={idx} className="flex justify-between items-center bg-dark-900/50 p-4 rounded-2xl border border-gray-700"><div><p className="font-bold text-white">{item.name}</p><p className="text-sm text-gray-400">₹{item.price}</p></div><div className="flex items-center gap-3"><button onClick={() => updateQty(idx, -1)} className="w-8 h-8 bg-
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">{items.map((item, idx) => (<div key={idx} className="flex justify-between items-center bg-dark-900/50 p-4 rounded-2xl border border-gray-700"><div><p className="font-bold text-white">{item.name}</p><p className="text-sm text-gray-400">₹{item.price}</p></div><div className="flex items-center gap-3"><button onClick={() => updateQty(idx, -1)} className="w-8 h-8 bg-gray-800 hover:bg-rose-500/20 hover:text-rose-500 rounded-xl text-white font-bold transition">-</button><span className="font-bold w-6 text-center text-white">{item.qty}</span><button onClick={() => updateQty(idx, 1)} className="w-8 h-8 bg-gray-800 hover:bg-emerald-500/20 hover:text-emerald-500 rounded-xl text-white font-bold transition">+</button></div><div className="font-bold text-brand w-16 text-right">₹{item.price * item.qty}</div></div>))}</div>
+                        <div className="mt-8 pt-4 border-t border-gray-700 flex justify-between items-center"><div><p className="text-xs text-gray-400 uppercase tracking-wider">New Total</p><p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-accent">₹{total}</p></div><button onClick={handleSave} className="bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white px-8 py-3 rounded-2xl font-bold transition transform active:scale-95">Save Changes</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Login = ({ onLogin, users, apiError }) => {
+            const [selectedUser, setSelectedUser] = useState('');
+            const [pin, setPin] = useState('');
+            const [error, setError] = useState('');
+            const handleSubmit = (e) => { e.preventDefault(); setError(''); if (!selectedUser) return setError('Please select a user.'); if (pin.length !== 4) return setError('PIN must be 4 digits.'); onLogin(selectedUser, pin); };
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-black relative overflow-hidden p-4">
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-brand/20 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="glass-card w-full max-w-md p-8 md:p-10 relative z-10 fade-in rounded-3xl">
+                        <div className="text-center mb-10"><div className="w-20 h-20 bg-gradient-to-tr from-brand to-brand-accent rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-neon"><span className="text-4xl">🍦</span></div><h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Murlidhar POS</h1><p className="text-gray-400">Offline Terminal</p></div>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="space-y-2"><label className="block text-sm font-medium text-gray-300">Select Staff</label><select className="w-full p-4 bg-dark-800 border border-dark-700 rounded-2xl text-white focus:border-brand transition" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}><option value="" className="text-gray-500 bg-black">-- Choose Account --</option>{users.map(u => <option key={u.id} value={u.name} disabled={Number(u.locked) === 1} className="bg-black">{u.name} ({u.role}) {Number(u.locked) === 1 ? '🔒 Locked' : ''}</option>)}</select></div>
+                            <div className="space-y-2"><label className="block text-sm font-medium text-gray-300">Security PIN</label><input type="password" maxLength="4" className="w-full p-4 text-center text-3xl tracking-[1em] bg-dark-800 border border-dark-700 rounded-2xl text-white focus:border-brand transition" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="••••" /></div>
+                            {(error || apiError) && <p className="text-rose-400 text-sm text-center bg-rose-500/10 p-3 rounded-2xl border border-rose-500/20">{error || apiError}</p>}
+                            <button type="submit" className="w-full bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white font-bold py-4 rounded-2xl transition transform active:scale-95 flex justify-center items-center gap-2 text-lg"><Icon name="log-in" /> Access Terminal</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const UserOverview = ({ user, transactions }) => {
+            const todayStr = getTodayDate(); 
+            const myTx = transactions.filter(t => t.employeeName === user.name);
+            const myTodayTx = myTx.filter(t => t.date.startsWith(todayStr));
+            const totalSales = myTx.reduce((s, t) => s + Number(t.total), 0);
+            const todaySales = myTodayTx.reduce((s, t) => s + Number(t.total), 0);
+            const commRate = Number(user.commission) || 0;
+            const totalComm = totalSales * (commRate / 100);
+            const todayComm = todaySales * (commRate / 100);
+            return (
+                <div className="p-6 md:p-8 fade-in pb-32">
+                    <h2 className="text-3xl font-bold text-white mb-2">My Dashboard</h2><p className="text-gray-400 mb-8">Welcome back, {user.name}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="glass-card p-6 rounded-3xl relative overflow-hidden"><div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl"></div><div className="relative z-10"><div className="flex items-center gap-3 mb-4 text-emerald-400"><Icon name="calendar" /><span className="font-semibold">Today's Performance</span></div><div className="space-y-1"><p className="text-sm text-gray-400">Commission Earned</p><p className="text-4xl font-bold text-white">₹{todayComm.toFixed(2)}</p></div><div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Total Sales</p><p className="text-xl font-bold text-gray-200">₹{todaySales}</p></div></div></div>
+                        <div className="glass-card p-6 rounded-3xl relative overflow-hidden"><div className="absolute -right-6 -top-6 w-24 h-24 bg-brand-accent/20 rounded-full blur-xl"></div><div className="relative z-10"><div className="flex items-center gap-3 mb-4 text-brand-accent"><Icon name="trending-up" /><span className="font-semibold">All-Time Stats</span></div><div className="space-y-1"><p className="text-sm text-gray-400">Total Commission</p><p className="text-4xl font-bold text-white">₹{totalComm.toFixed(2)}</p></div><div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Lifetime Sales</p><p className="text-xl font-bold text-gray-200">₹{totalSales}</p></div></div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const POS = ({ user, users, products, onLogout, onCheckout, transactions, onUpdateTransaction }) => {
+            const [view, setView] = useState('pos'); const [cart, setCart] = useState([]); const [search, setSearch] = useState(''); const [showHistory, setShowHistory] = useState(false); const [editingTx, setEditingTx] = useState(null);
+            const liveUserStatus = users.find(u => u.id === user.id);
+            if (liveUserStatus && Number(liveUserStatus.locked) === 1) return <div className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-center p-4"><h1 className="text-4xl font-bold text-white mb-4">Account Locked</h1><button onClick={() => window.location.reload()} className="px-8 py-3 bg-gray-800 rounded-2xl text-white">Refresh</button></div>;
+            const addToCart = (product) => setCart(prev => { const existing = prev.find(item => item.id === product.id); if (existing) return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item); return [...prev, { ...product, qty: 1 }]; });
+            const updateQty = (id, delta) => setCart(prev => prev.map(item => { if (item.id === id) { const newQty = item.qty + delta; return newQty > 0 ? { ...item, qty: newQty } : null; } return item; }).filter(Boolean));
+            const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+            const handlePrint = () => { window.print(); };
+            const userHistory = transactions.filter(t => t.employeeName === user.name).sort((a,b) => b.id - a.id); 
+            const groupedHistory = userHistory.reduce((acc, tx) => { try { const day = tx.date.split(' ')[0]; if(!acc[day]) acc[day] = []; acc[day].push(tx); return acc; } catch(e) { return acc; } }, {});
+
+            return (
+                <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-black relative">
+                    {editingTx && <EditTransactionModal transaction={editingTx} onClose={() => setEditingTx(null)} onSave={(id, items, total) => { onUpdateTransaction(id, items, total); setEditingTx(null); }} />}
+                    {view === 'dashboard' && <div className="absolute inset-0 z-40 bg-black flex flex-col fade-in"><div className="glass p-4 md:px-8 flex justify-between items-center border-b border-dark-700"><h2 className="text-xl font-bold text-white">Staff Portal</h2><button onClick={() => setView('pos')} className="px-5 py-2 bg-dark-800 hover:bg-dark-700 rounded-xl text-gray-300 font-bold transition border border-dark-700">Back to POS</button></div><div className="flex-1 overflow-hidden"><UserOverview user={user} transactions={transactions} /></div></div>}
+                    {showHistory && (<div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-end md:items-center p-4 fade-in"><div className="glass-card w-full max-w-2xl h-[85vh] rounded-t-3xl md:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-dark-700"><div className="p-6 border-b border-dark-700 flex justify-between items-center bg-dark-800/50"><h2 className="text-2xl font-bold text-white">Sales History</h2><button onClick={() => setShowHistory(false)} className="p-2 bg-dark-800 hover:bg-rose-500 rounded-full transition text-white"><Icon name="x" /></button></div><div className="flex-1 overflow-y-auto p-6 space-y-4">{Object.keys(groupedHistory).length === 0 && <p className="text-center text-gray-500 mt-20">No sales recorded yet.</p>}{Object.keys(groupedHistory).map(date => (<div key={date}><h3 className="text-sm font-bold text-brand bg-brand/10 inline-block px-4 py-1.5 rounded-xl mb-3 border border-brand/20">{date}</h3><div className="space-y-2">{groupedHistory[date].map(tx => (<div key={tx.id} className="bg-dark-800/50 border border-dark-700 rounded-2xl p-4 flex justify-between items-center hover:bg-dark-800 transition"><div><span className="font-bold text-lg text-white block">₹{tx.total}</span><span className="text-sm font-mono text-brand-accent bg-dark-900 px-2 py-1 rounded-lg border border-dark-700">{tx.date.split(' ')[1]}</span></div><button onClick={() => setEditingTx(tx)} className="bg-brand/10 text-brand hover:bg-brand hover:text-white px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2"><Icon name="edit-2" /> Edit</button></div>))}</div></div>))}</div></div></div>)}
+                    <div className="flex-1 flex flex-col h-full bg-black">
+                        <header className="glass p-4 md:px-6 flex justify-between items-center z-10 shadow-top sticky top-0"><div><h2 className="text-2xl font-bold text-white tracking-tight">Terminal</h2><p className="text-xs text-gray-400">Operator: <span className="text-brand font-bold">{user.name}</span></p></div><div className="flex gap-2"><button onClick={() => setView('dashboard')} className="hidden md:flex p-2 md:px-4 bg-dark-800 hover:bg-brand hover:text-white text-gray-300 hover:shadow-neon rounded-xl transition items-center gap-2 text-sm font-medium"><Icon name="layout-dashboard" /> Dashboard</button><button onClick={() => setShowHistory(true)} className="p-2 md:px-4 bg-dark-800 hover:bg-brand-accent hover:text-white text-gray-300 hover:shadow-glow rounded-xl transition items-center gap-2 text-sm font-medium"><Icon name="history" /> <span className="hidden md:inline">History</span></button><button onClick={onLogout} className="p-2 text-rose-400 hover:text-rose-500 transition"><Icon name="log-out" /></button></div></header>
+                        <div className="p-4 md:p-6 flex-1 overflow-y-auto pb-32"><div className="mb-6 relative sticky top-0 z-20 pb-2 bg-black"><Icon name="search" className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder="Search icecreams..." className="w-full pl-12 pr-4 py-3 bg-dark-800 border border-dark-700 rounded-2xl text-white placeholder-gray-500 focus:border-brand transition" value={search} onChange={(e) => setSearch(e.target.value)} /></div><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{filteredProducts.map(p => (<button key={p.id} onClick={() => addToCart(p)} className="group bg-dark-800 border border-dark-700 hover:border-brand/50 hover:shadow-neon p-5 rounded-3xl transition flex flex-col items-center justify-center gap-3 relative overflow-hidden active:scale-95 duration-100">{p.image ? <img src={p.image} className="w-16 h-16 object-cover rounded-full mb-2 group-hover:scale-110 transition duration-300" onError={(e)=>e.target.style.display='none'} /> : <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-2 bg-gradient-to-br from-brand/20 to-brand-accent/20 group-hover:from-brand/40 group-hover:to-brand-accent/40 transition">🍦</div>}<div className="text-center w-full z-10"><h3 className="font-semibold text-gray-200 text-sm truncate group-hover:text-white">{p.name}</h3><p className="text-brand font-bold mt-1 group-hover:scale-110 transition inline-block">₹{p.price}</p></div></button>))}</div></div>
+                    </div>
+                    <div className="w-full md:w-[400px] bg-dark-900 border-t border-dark-700 flex flex-col h-[45vh] md:h-full z-20 shadow-2xl relative md:relative fixed bottom-0 left-0 md:border-l md:border-t-0"><div className="p-5 border-b border-dark-700 bg-dark-900/50 flex justify-between items-center"><h3 className="font-bold text-lg text-white">Current Order</h3><span className="bg-brand/20 text-brand px-3 py-1 rounded-xl text-xs font-bold border border-brand/20">{cart.length} Items</span></div><div className="flex-1 overflow-y-auto p-5 space-y-3">{cart.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50"><Icon name="shopping-bag" className="w-12 h-12 mb-3" /><p className="font-medium">Cart is empty</p></div> : cart.map(item => (<div key={item.id} className="flex justify-between items-center bg-dark-800/50 p-3 rounded-2xl border border-dark-700/50"><div className="flex-1 pr-3"><p className="font-medium text-gray-200 text-sm truncate">{item.name}</p><p className="text-xs text-gray-500">₹{item.price} x {item.qty}</p></div><div className="flex items-center gap-2 bg-dark-900 rounded-xl p-1 border border-dark-700"><button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded-lg bg-dark-800 hover:bg-rose-500/20 hover:text-rose-500 text-gray-400 flex items-center justify-center transition">-</button><span className="w-8 text-center text-sm font-bold text-white">{item.qty}</span><button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded-lg bg-dark-800 hover:bg-emerald-500/20 hover:text-emerald-500 text-gray-400 flex items-center justify-center transition">+</button></div></div>))}</div><div className="p-6 bg-dark-900 border-t border-dark-700 space-y-4 md:pb-6 pb-32"><div className="flex justify-between items-end"><span className="text-gray-400 font-medium">Total Amount</span><span className="text-3xl font-bold text-white">₹{totalAmount}</span></div><div className="grid grid-cols-2 gap-3"><button onClick={handlePrint} disabled={cart.length === 0} className="w-full bg-dark-800 hover:bg-dark-700 text-gray-300 font-bold py-3.5 rounded-2xl transition flex justify-center items-center gap-2 border border-dark-600"><Icon name="printer" /> Print</button><button onClick={() => { onCheckout(cart, totalAmount); setCart([]); }} disabled={cart.length === 0} className="w-full bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white font-bold py-3.5 rounded-2xl transition transform active:scale-95 flex justify-center items-center gap-2"><Icon name="check" /> Save</button></div></div><div id="print-area" className="hidden"><div style={{textAlign: 'center', marginBottom: '20px'}}><h1 style={{fontSize: '24px', fontWeight: 'bold', margin: 0}}>MURLIDHAR ICECREAM</h1></div><div style={{borderBottom: '1px dashed #ccc', marginBottom: '10px', paddingBottom: '10px'}}><p><strong>Date:</strong> {new Date().toLocaleDateString()}</p><p><strong>Operator:</strong> {user.name}</p></div><table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '20px', fontSize: '14px'}}><thead><tr style={{borderBottom: '2px solid #000'}}><th style={{textAlign: 'left'}}>Item</th><th style={{textAlign: 'right'}}>Total</th></tr></thead><tbody>{cart.map((item, idx) => (<tr key={idx}><td style={{padding: '5px 0'}}>{item.name} x {item.qty}</td><td style={{textAlign: 'right'}}>₹{item.price * item.qty}</td></tr>))}</tbody></table><div style={{textAlign: 'right', fontSize: '18px', fontWeight: 'bold', borderTop: '2px solid #000', paddingTop: '10px'}}>TOTAL: ₹{totalAmount}</div></div></div>
+                </div>
+            );
+        };
+
+        const OverviewTab = ({ transactions, users, returns, products, expenses }) => {
+            const chart1 = useRef(null); const colorPalette = ['#d946ef', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6']; const todayStr = getTodayDate();
+            const safeUsers = Array.isArray(users) ? users : []; const safeReturns = Array.isArray(returns) ? returns : []; const safeTx = Array.isArray(transactions) ? transactions : []; const safeExp = Array.isArray(expenses) ? expenses : [];
+            const totalGrossSales = safeTx.reduce((sum, t) => sum + Number(t.total), 0);
+            const totalReturns = safeReturns.reduce((sum, r) => sum + Number(r.amount), 0);
+            const totalIncome = totalGrossSales - totalReturns;
+            const totalOwnerExpenses = safeExp.reduce((sum, e) => sum + Number(e.amount), 0);
+            
+            // ANALYTICS (FIXED 5 AM Logic)
+            const analytics = safeUsers.filter(u => u.role !== 'admin').map(u => {
+                const empTodayTx = safeTx.filter(t => t.employeeName === u.name && t.date.startsWith(todayStr));
+                const totalSalesToday = empTodayTx.reduce((s,t) => s + Number(t.total), 0);
+                const userTodayReturns = safeReturns.filter(r => r.userName === u.name && r.date && r.date.startsWith(todayStr));
+                const totalReturnValToday = userTodayReturns.reduce((s,r) => s + Number(r.amount), 0);
+                const netSalesToday = totalSalesToday - totalReturnValToday;
+                const comm = netSalesToday * (Number(u.commission)/100);
+                return { name: u.name, totalSales: totalSalesToday, netSales: netSalesToday, totalReturnVal: totalReturnValToday, comm };
+            });
+            const totalCommToday = analytics.reduce((s,a) => s + a.comm, 0);
+
+            useEffect(() => { 
+                try {
+                    if(window.c1) { window.c1.destroy(); window.c1 = null; }
+                    if(chart1.current && analytics.length > 0) {
+                        Chart.defaults.color = '#94a3b8'; Chart.defaults.borderColor = '#1e1e1e';
+                        window.c1 = new Chart(chart1.current, { type: 'bar', data: { labels: analytics.map(e => e.name), datasets: [{ label: 'Today Net Sales (₹)', data: analytics.map(e => e.netSales), backgroundColor: analytics.map((_, i) => colorPalette[i % colorPalette.length]), borderRadius: 6, barThickness: 40 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#1e1e1e' } }, x: { grid: { display: false } } } } }); 
+                    }
+                } catch (e) {}
+            }, [transactions, returns]);
+
+            return (
+                <div className="space-y-6 fade-in pb-32">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-card p-6 rounded-3xl border-l-4 border-emerald-500"><p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Lifetime Income</p><h3 className="text-3xl font-bold text-white">₹{totalIncome}</h3></div>
+                        <div className="glass-card p-6 rounded-3xl border-l-4 border-rose-500"><p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Expenses</p><h3 className="text-3xl font-bold text-white">₹{(totalOwnerExpenses).toFixed(2)}</h3></div>
+                        <div className="glass-card p-6 rounded-3xl border-l-4 border-brand-accent"><p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Today's Staff Comm</p><h3 className="text-3xl font-bold text-brand-accent">₹{totalCommToday.toFixed(2)}</h3></div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="glass-card p-6 rounded-3xl overflow-y-auto pb-4"><div className="flex justify-between items-center mb-6"><h3 className="font-bold text-white text-lg">Staff Performance <span className="text-brand text-sm bg-brand/10 px-2 py-1 rounded ml-2">TODAY</span></h3></div><div className="overflow-x-auto"><table className="w-full text-left text-sm whitespace-nowrap"><thead><tr className="border-b border-dark-700 text-gray-500 text-xs uppercase tracking-wider"><th className="pb-3 pl-2">Employee</th><th className="pb-3 text-right">Today Sales</th><th className="pb-3 text-right text-rose-400">Deduct</th><th className="pb-3 text-right text-brand">Comm</th></tr></thead><tbody>{analytics.map(u => <tr key={u.name} className="border-b border-dark-700/50 last:border-0 hover:bg-dark-800/50 transition"><td className="py-4 pl-2 font-bold text-gray-200">{u.name}</td><td className="py-4 text-right pr-2 text-emerald-400">+₹{u.totalSales}</td><td className="py-4 text-right pr-2 text-rose-400 font-bold">{u.totalReturnVal > 0 ? `-₹${u.totalReturnVal}` : '-'}</td><td className="py-4 text-right pr-2 font-bold text-brand">₹{u.comm.toFixed(2)}</td></tr>)}</tbody></table></div></div>
+                        <div className="glass-card p-6 rounded-3xl h-[400px] flex flex-col"><h3 className="font-bold text-white mb-4 text-lg">Today's Sales Graph</h3><div className="flex-1 relative"><canvas ref={chart1}></canvas></div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ReturnsTab = ({ returns, products, users, actions, expenses }) => {
+            const [mode, setMode] = useState('item'); const [userId, setUserId] = useState(''); const [itemId, setItemId] = useState(''); const [qty, setQty] = useState(1); const [bulkAmount, setBulkAmount] = useState(''); const [reason, setReason] = useState('Damage'); const [costBearer, setCostBearer] = useState('100_owner'); 
+            const handleAdd = (e) => {
+                e.preventDefault(); if(!userId) return alert("Select employee");
+                const user = users.find(u => u.id == userId);
+                let val = 0; let returnObj = { userName: user.name, reason: reason, costBearer, isBulk: mode==='bulk'?1:0 };
+                
+                // 5 AM LOGIC (Fixed for Returns)
+                const now = new Date(); if (now.getHours() < 5) now.setDate(now.getDate() - 1);
+                const pad = n => n<10?'0'+n:n;
+                returnObj.date = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(new Date().getHours())}:${pad(new Date().getMinutes())}:${pad(new Date().getSeconds())}`;
+                
+                if (mode === 'bulk') { val = parseFloat(bulkAmount); if(!val || val <= 0) return alert("Invalid amount"); returnObj.amount = val; } 
+                else { const product = products.find(p => p.id == itemId); if(!product) return alert("Select Item"); val = product.price * parseInt(qty); returnObj.itemId = product.id; returnObj.itemName = product.name; returnObj.qty = qty; returnObj.amount = val; }
+                actions.addReturn(returnObj); setQty(1); setBulkAmount(''); setItemId('');
+            };
+            return (
+                <div className="space-y-6 fade-in pb-32">
+                    <div className="glass-card p-6 rounded-3xl border-l-4 border-rose-500 relative overflow-hidden"><div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-500/20 rounded-full blur-2xl"></div><div className="flex justify-between items-center mb-6 relative z-10"><h3 className="font-bold text-white text-lg">Log Return / Damage</h3><div className="flex bg-dark-800 p-1 rounded-xl border border-dark-700"><button type="button" onClick={()=>setMode('item')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${mode==='item'?'bg-brand text-white shadow-neon':'text-gray-400 hover:text-white'}`}>Item</button><button type="button" onClick={()=>setMode('bulk')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${mode==='bulk'?'bg-brand text-white shadow-neon':'text-gray-400 hover:text-white'}`}>Bulk</button></div></div><form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end"><div className="md:col-span-1"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Employee</label><select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" onChange={e=>setUserId(e.target.value)} value={userId}><option value="" className="text-gray-500">-- Select --</option>{users.filter(u=>u.role!=='admin').map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>{mode === 'item' ? (<><div className="md:col-span-1"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Item</label><select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" onChange={e=>setItemId(e.target.value)} value={itemId}><option value="">-- Item --</option>{products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="md:col-span-1"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Qty</label><input type="number" min="1" className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" value={qty} onChange={e=>setQty(e.target.value)} /></div></>) : (<div className="md:col-span-2"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Amount (₹)</label><input placeholder="Total Value" type="number" className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" value={bulkAmount} onChange={e=>setBulkAmount(e.target.value)} /></div>)}<div className="md:col-span-1"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Reason</label><select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white font-bold focus:border-brand outline-none transition" value={reason} onChange={e=>setReason(e.target.value)}><option value="Damage">Damage</option><option value="Returned">Return</option><option value="Other">Other</option></select></div><div className="md:col-span-1"><label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Who Pays?</label><select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-sm focus:border-brand outline-none transition" value={costBearer} onChange={e=>setCostBearer(e.target.value)}><option value="100_owner">Owner</option><option value="50_50">50-50</option><option value="100_emp">Emp</option></select></div><button type="submit" className="md:col-span-5 bg-gradient-to-r from-rose-500 to-orange-600 hover:shadow-neon text-white px-6 py-2.5 rounded-xl font-bold transition transform active:scale-95">Save Entry</button></form></div>
+                    <div className="glass-card rounded-3xl overflow-hidden border border-dark-700 pb-4"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap min-w-[800px]"><thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Date</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">User</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Item/Amount</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Type</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Cost On</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider text-right">Action</th></tr></thead><tbody className="text-sm">{returns.map(r => (<tr key={r.id} className="border-b border-dark-700/50 hover:bg-dark-800/50 transition"><td className="p-5 text-gray-400">{r.date}</td><td className="p-5 font-bold text-white">{r.userName}</td><td className="p-5">{r.isBulk == 1 ? <span className="text-white">Bulk: ₹{r.amount}</span> : <span>{r.itemName} <span className="text-gray-600">x</span> {r.qty} <span className="text-xs text-gray-600">(₹{r.amount})</span></span>}</td><td className="p-5"><span className={`px-2 py-1 rounded text-xs font-bold border ${r.reason === 'Damage' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : r.reason === 'Returned' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-gray-700/20 text-gray-400 border-gray-600/30'}`}>{r.reason}</span></td><td className="p-5"><span className="text-xs bg-orange-500/10 text-orange-400 px-2 py-1 rounded border border-orange-500/20">{r.costBearer === '100_owner' ? 'Owner' : r.costBearer === '100_emp' ? 'Employee' : '50/50'}</span></td><td className="p-5 text-right"><button onClick={()=>actions.deleteReturn(r.id)} className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 p-2 rounded-xl transition"><Icon name="trash-2" width={16} /></button></td></tr>))}</tbody></table></div>{returns.length === 0 && <div className="p-8 text-center text-gray-500 bg-dark-800/20 rounded-3xl">No returns.</div>}</div>
+                </div>
+            );
+        };
+        
+        // Simplified other tabs
+        const PopularItemsTab = ({ transactions }) => { const chartRef = useRef(null); const itemCounts = {}; transactions.forEach(t => { if(Array.isArray(t.items)) t.items.forEach(i => itemCounts[i.name] = (itemCounts[i.name] || 0) + i.qty); }); const popularItems = Object.keys(itemCounts).map(k => ({ name: k, qty: itemCounts[k] })).sort((a,b) => b.qty - a.qty); useEffect(() => { if(window.cPie) window.cPie.destroy(); if(chartRef.current && popularItems.length > 0) window.cPie = new Chart(chartRef.current, { type: 'doughnut', data: { labels: popularItems.map(i => i.name), datasets: [{ data: popularItems.map(i => i.qty), backgroundColor: ['#d946ef', '#fbbf24', '#8b5cf6', '#f97316', '#10b981', '#06b6d4'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } } }); }, [transactions]); return (<div className="space-y-6 fade-in pb-32"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="glass-card p-6 rounded-3xl min-h-[400px]"><h3 className="font-bold text-white mb-6 text-lg">Top Sellers</h3><div className="space-y-0 overflow-y-auto max-h-[400px]">{popularItems.map((item, idx) => (<div key={item.name} className={`flex justify-between items-center py-4 border-b border-dark-700/50 ${idx === 0 ? 'text-brand-accent font-bold text-lg' : 'text-gray-300'}`}><span className="flex items-center gap-3"><span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs ${idx < 3 ? 'bg-brand text-white' : 'bg-dark-800 text-gray-500'}`}>{idx+1}</span>{item.name}</span><span className={`font-bold ${idx === 0 ? 'text-brand-accent' : 'text-gray-500'}`}>{item.qty} sold</span></div>))}</div></div><div className="glass-card p-6 rounded-3xl min-h-[400px] flex items-center justify-center"><div className="w-full h-80 relative"><canvas ref={chartRef}></canvas></div></div></div></div>); };
+        const EmployeesTab = ({ users, actions }) => { const [data, setData] = useState({ name: '', pin: '', comm: 0 }); return (<div className="space-y-6 fade-in pb-32"><div className="glass-card p-6 rounded-3xl"><h3 className="font-bold text-white mb-4 text-lg">Add Staff</h3><div className="flex gap-4 flex-wrap"><input placeholder="Name" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition flex-1" onChange={e=>setData({...data, name:e.target.value})} /><input placeholder="PIN" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition w-32" onChange={e=>setData({...data, pin:e.target.value})} /><input placeholder="%" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition w-24" onChange={e=>setData({...data, comm:e.target.value})} /><button onClick={()=>actions.addUser({...data, role:'staff'})} className="bg-brand text-white px-6 rounded-xl font-bold">Add</button></div></div><div className="glass-card rounded-3xl overflow-hidden border border-dark-700 pb-4"><div className="overflow-x-auto"><table className="w-full text-left whitespace-nowrap min-w-[600px]"><thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs">Name</th><th className="p-5 text-gray-400 text-xs">Comm</th><th className="p-5 text-gray-400 text-xs">Status</th><th className="p-5 text-gray-400 text-xs">Actions</th></tr></thead><tbody className="divide-y divide-dark-700/50">{users.filter(u=>u.role!=='admin').map(u=>(<tr key={u.id} className="hover:bg-dark-800/50"><td className="p-5 font-bold text-white">{u.name}</td><td className="p-5 text-brand-accent font-bold">{u.commission}% <button onClick={()=>actions.updateCommission(u.id)} className="ml-2 text-gray-500 hover:text-white"><Icon name="edit-2" width={14}/></button></td><td className="p-5">{Number(u.locked)===1?'Locked':'Active'}</td><td className="p-5 flex gap-3"><button onClick={()=>actions.toggleLock(u.id)} className="text-orange-400"><Icon name={Number(u.locked)===1?'unlock':'lock'} /></button><button onClick={()=>actions.updatePin(u.id)} className="text-brand"><Icon name="key" width={16} /></button><button onClick={()=>actions.deleteUser(u.id)} className="text-rose-400"><Icon name="trash-2" width={16} /></button></td></tr>))}</tbody></table></div></div></div>); };
+        const ExpensesTab = ({ expenses, actions }) => { const [data, setData] = useState({ desc: '', amt: '' }); return (<div className="space-y-6 fade-in pb-32"><div className="glass-card p-6 rounded-3xl border-l-4 border-orange-500"><h3 className="font-bold text-white mb-4 text-lg">Record Expense</h3><div className="flex gap-4"><input placeholder="Description" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white transition flex-1" onChange={e=>setData({...data, desc:e.target.value})} /><input placeholder="Amount" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white transition w-40" onChange={e=>setData({...data, amt:e.target.value})} /><button onClick={()=>actions.addExpense(data)} className="bg-orange-500 text-white px-6 rounded-xl font-bold">Add</button></div></div><div className="glass-card rounded-3xl overflow-hidden border border-dark-700 pb-4"><table className="w-full text-left whitespace-nowrap min-w-[600px]"><thead className="bg-dark-800"><tr><th className="p-5 text-gray-400 text-xs">Date</th><th className="p-5 text-gray-400 text-xs">Desc</th><th className="p-5 text-gray-400 text-xs">Amount</th><th className="p-5">Action</th></tr></thead><tbody>{expenses.map(e=>(<tr key={e.id}><td className="p-5 text-gray-300">{e.date}</td><td className="p-5 text-white">{e.description}</td><td className="p-5 text-rose-400">-₹{e.amount}</td><td className="p-5"><button onClick={()=>actions.deleteExpense(e.id)} className="text-rose-400"><Icon name="trash-2" width={16}/></button></td></tr>))}</tbody></table></div></div>); };
+        const MenuTab = ({ products, actions }) => { const [data, setData] = useState({ name: '', price: '', image: '' }); return (<div className="space-y-6 fade-in pb-32"><div className="glass-card p-6 rounded-3xl border-l-4 border-brand"><h3 className="font-bold text-white mb-4 text-lg">Add Product</h3><div className="flex gap-4 flex-wrap"><input placeholder="Name" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white transition flex-1" onChange={e=>setData({...data, name:e.target.value})} /><input placeholder="Price" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white transition w-32" onChange={e=>setData({...data, price:e.target.value})} /><input placeholder="Image URL (Optional)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white transition flex-[2]" onChange={e=>setData({...data, image:e.target.value})} /><button onClick={()=>actions.addProduct(data)} className="bg-brand text-white px-6 rounded-xl font-bold">Add</button></div></div><div className="glass-card rounded-3xl overflow-hidden border border-dark-700 pb-4"><table className="w-full text-left whitespace-nowrap min-w-[600px]"><thead className="bg-dark-800"><tr><th className="p-5 text-gray-400 text-xs">Image</th><th className="p-5 text-gray-400 text-xs">Name</th><th className="p-5 text-gray-400 text-xs">Price</th><th className="p-5">Action</th></tr></thead><tbody>{products.map(p=>(<tr key={p.id}><td className="p-5">{p.image?<img src={p.image} className="w-10 h-10 rounded-2xl object-cover"/>:'-'}</td><td className="p-5 font-bold text-white">{p.name}</td><td className="p-5 text-brand-accent">₹{p.price}</td><td className="p-5"><button onClick={()=>actions.deleteProduct(p.id)} className="text-rose-400"><Icon name="trash-2" /></button></td></tr>))}</tbody></table></div></div>); };
+
+        const AdminDashboard = ({ user, products, transactions, expenses, users, returns, actions }) => {
+            const [activeTab, setActiveTab] = useState('overview'); const [editingTx, setEditingTx] = useState(null);
+            const iconMap = { overview: 'layout-dashboard', popular: 'trending-up', history: 'history', returns: 'rotate-ccw', expenses: 'banknote', employees: 'users', menu: 'utensils' };
+            return (
+                <div className="min-h-screen bg-black flex flex relative text-gray-300 flex-col md:flex-row">
+                    {editingTx && <EditTransactionModal transaction={editingTx} onClose={()=>setEditingTx(null)} onSave={(id, items, total) => { actions.updateTransaction(id, items, total); setEditingTx(null); }} />}
+                    <div className="hidden md:flex flex-col w-72 bg-dark-900 border-r border-dark-800 h-screen p-4 z-20"><div className="p-8"><h1 className="text-2xl font-bold text-white">Admin<span className="text-brand">.Panel</span></h1></div><nav className="space-y-2 flex-1">{Object.keys(iconMap).map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 capitalize transition-all ${activeTab === tab ? 'bg-brand text-white shadow-neon font-bold' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}><Icon name={iconMap[tab]} width={20} /> {tab}</button>))}</nav><div className="p-4 border-t border-dark-800"><button onClick={actions.logout} className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-rose-500/10 rounded-xl transition flex gap-3 items-center"><Icon name="log-out" width={18} /> Logout</button></div></div>
+                    <div className="md:hidden glass p-4 flex justify-between items-center z-30 shadow-top sticky top-0"><h1 className="text-xl font-bold text-white capitalize">{activeTab}</h1><button onClick={actions.logout} className="p-2 text-rose-400 bg-dark-800 rounded-full"><Icon name="log-out" width={18} /></button></div>
+                    <nav className="md:hidden fixed bottom-0 left-0 w-full bg-dark-900 border-t border-dark-800 flex justify-around p-4 pb-safe z-50 glass">{Object.keys(iconMap).map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} className={`flex flex-col items-center justify-center gap-1 transition-all ${activeTab === tab ? 'text-brand' : 'text-gray-500'}`}><Icon name={iconMap[tab]} width={20} /><span className="text-[10px] font-medium capitalize">{tab}</span></button>))}</nav>
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8 h-full w-full relative pb-32 md:pb-8 min-w-0 z-10">
+                        {activeTab === 'overview' && <OverviewTab transactions={transactions} users={users} returns={returns} products={products} expenses={expenses} />}
+                        {activeTab === 'popular' && <PopularItemsTab transactions={transactions} />}
+                        {activeTab === 'history' && (<div className="glass-card rounded-3xl overflow-hidden fade-in border border-dark-700 pb-32"><div className="p-6 border-b border-dark-700"><h3 className="text-xl font-bold text-white">Sales History</h3></div><div className="overflow-x-auto pb-4"><table className="w-full text-left whitespace-nowrap min-w-[600px]"><thead className="bg-dark-800"><tr><th className="p-5 text-gray-400 text-xs">Date</th><th className="p-5 text-gray-400 text-xs">Staff</th><th className="p-5 text-gray-400 text-xs">Total</th><th className="p-5 text-gray-400 text-xs">Action</th></tr></thead><tbody className="divide-y divide-dark-700/50">{transactions.map(tx => (<tr key={tx.id} className="hover:bg-dark-800/50"><td className="p-5 text-gray-300">{tx.date}</td><td className="p-5 text-white font-semibold">{tx.employeeName}</td><td className="p-5 font-bold text-brand">₹{tx.total}</td><td className="p-5"><button onClick={()=>setEditingTx(tx)} className="bg-brand/10 text-brand px-4 py-1.5 rounded-xl text-sm font-bold flex items-center gap-2"><Icon name="edit-2" width={14} /> Edit</button></td></tr>))}</tbody></table></div></div>)}
+                        {activeTab === 'returns' && <ReturnsTab returns={returns} products={products} users={users} actions={actions} expenses={expenses} />}
+                        {activeTab === 'expenses' && <ExpensesTab expenses={expenses} actions={actions} />}
+                        {activeTab === 'employees' && <EmployeesTab users={users} actions={actions} />}
+                        {activeTab === 'menu' && <MenuTab products={products} actions={actions} />}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [toast, setToast] = useState(null);
+            const [data, setData] = useState({ users: [], products: [], transactions: [], expenses: [], returns: [] });
+
+            const persistUser = (userData) => {
+                setUser(userData);
+                if (userData) localStorage.setItem('mpos_user_session', JSON.stringify(userData));
+                else localStorage.removeItem('mpos_user_session');
+            };
+
+            const refreshData = async () => {
+                const res = await LocalDB.execute('get_all');
+                setData(res);
+            };
+
+            useEffect(() => {
+                const storedUserStr = localStorage.getItem('mpos_user_session');
+                if (storedUserStr) {
+                    try {
+                        const storedUser = JSON.parse(storedUserStr);
+                        setUser(storedUser);
+                        refreshData().then(() => setLoading(false));
+                    } catch (e) {
+                        localStorage.removeItem('mpos_user_session');
+                        refreshData().then(() => setLoading(false));
+                    }
+                } else {
+                    refreshData().then(() => setLoading(false));
+                }
+            }, []);
+
+            const apiCall = async (action, payload) => {
+                const j = await LocalDB.execute(action, payload);
+                if(j.status === 'success') { 
+                    setToast({message: 'Success', type: 'success'}); 
+                    refreshData(); 
+                    return j; 
+                } else { 
+                    setToast({message: j.message, type: 'error'}); 
+                    return false; 
+                }
+            };
+
+            const handleLogin = async (name, pin) => {
+                const j = await LocalDB.execute('login', {name, pin});
+                if(j.status === 'success') persistUser(j.user); else setError(j.message);
+            };
+
+            const actions = {
+                logout: () => persistUser(null), 
+                addProduct: (p) => apiCall('add_product', p),
+                deleteProduct: (id) => apiCall('delete_product', {id}),
+                addUser: (u) => apiCall('add_user', {name: u.name, pin: u.pin, role: 'staff', commission: u.comm}),
+                deleteUser: (id) => apiCall('delete_user', {id}),
+                toggleLock: (id) => apiCall('toggle_lock', {id}),
+                addExpense: (e) => apiCall('add_expense', {desc: e.desc, amount: e.amt}),
+                deleteExpense: (id) => apiCall('delete_expense', {id}),
+                addReturn: (r) => apiCall('add_return', r),
+                deleteReturn: (id) => apiCall('delete_return', {id}),
+                updatePin: (id) => { const p=prompt("New PIN"); if(p) apiCall('update_pin', {id, pin:p}); },
+                updateCommission: (id) => { const c=prompt("Comm %"); if(c) apiCall('update_commission', {id, commission:c}); },
+                updateTransaction: (id, items, total) => apiCall('update_transaction', {id, items, total})
+            };
+
+            if(loading) return <div className="fixed inset-0 bg-black flex flex-col items-center justify-center"><div className="loader mb-4"></div><p className="text-brand font-bold tracking-widest">STARTING OFFLINE MODE</p></div>;
+            if(!user) return <Login onLogin={handleLogin} users={data.users} apiError={error} />;
+
+            return (
+                <>
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={()=>setToast(null)} />}
+                    {user.role === 'admin' ? 
+                        <AdminDashboard user={user} {...data} actions={actions} /> : 
+                        <POS user={user} {...data} onLogout={()=>persistUser(null)} onCheckout={(i,t) => apiCall('save_transaction', {employeeName:user.name, items:i, total:t})} onUpdateTransaction={actions.updateTransaction} />
+                    }
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
