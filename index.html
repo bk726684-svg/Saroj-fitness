@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Murlidhar Icecream POS (Modern)</title>
+    <title>Murlidhar Icecream POS (Modern - Offline)</title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -94,9 +94,6 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- API CONFIGURATION ---
-        const API_URL = 'api.php'; 
-
         const { useState, useEffect, useRef } = React;
 
         // --- Helper Components ---
@@ -107,6 +104,195 @@
                 <i data-lucide={type === 'success' ? 'check-circle' : 'alert-circle'}></i><span className="font-medium">{message}</span>
             </div>;
         };
+        
+        const useIcons = (deps = []) => {
+            useEffect(() => { try { lucide.createIcons(); } catch (e) {} }, deps);
+        };
+
+        // --- EDIT TRANSACTION MODAL (Updated UI) ---
+        const EditTransactionModal = ({ transaction, onSave, onClose }) => {
+            const [items, setItems] = useState(JSON.parse(JSON.stringify(transaction.items)));
+            const total = items.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0);
+
+            const updateQty = (idx, delta) => {
+                const newItems = [...items];
+                newItems[idx].qty += delta;
+                if (newItems[idx].qty <= 0) {
+                    if(confirm("Remove this item?")) newItems.splice(idx, 1);
+                    else newItems[idx].qty = 1;
+                }
+                setItems(newItems);
+            };
+
+            const handleSave = () => {
+                if(items.length === 0) return alert("Order cannot be empty!");
+                onSave(transaction.id, items, total);
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
+                            <h3 className="text-xl font-bold text-white">Edit Order #{transaction.id}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white transition"><i data-lucide="x"></i></button>
+                        </div>
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                            {items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-dark-800/50 p-4 rounded-xl border border-dark-700">
+                                    <div>
+                                        <p className="font-bold text-white">{item.name}</p>
+                                        <p className="text-sm text-gray-400">₹{item.price}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => updateQty(idx, -1)} className="w-8 h-8 bg-dark-700 hover:bg-rose-500/20 hover:text-rose-500 rounded-lg text-white font-bold transition">-</button>
+                                        <span className="font-bold w-6 text-center text-white">{item.qty}</span>
+                                        <button onClick={() => updateQty(idx, 1)} className="w-8 h-8 bg-dark-700 hover:bg-emerald-500/20 hover:text-emerald-500 rounded-lg text-white font-bold transition">+</button>
+                                    </div>
+                                    <div className="font-bold text-brand w-16 text-right">₹{item.price * item.qty}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-8 pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <div>
+                                <p className="text-xs text-gray-400 uppercase tracking-wider">New Total</p>
+                                <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-accent">₹{total}</p>
+                            </div>
+                            <button onClick={handleSave} className="bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white px-8 py-3 rounded-xl font-bold transition transform hover:scale-105">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 1. LOGIN COMPONENT (Modern UI)
+        const Login = ({ onLogin, users, apiError }) => {
+            useIcons();
+            const [selectedUser, setSelectedUser] = useState('');
+            const [pin, setPin] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+                if (!selectedUser) return setError('Please select a user.');
+                if (pin.length !== 4) return setError('PIN must be 4 digits.');
+                onLogin(selectedUser, pin);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-dark-900 relative overflow-hidden p-4">
+                    {/* Background Blobs */}
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-brand/20 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-brand-accent/20 rounded-full blur-[100px] translate-x-1/2 translate-y-1/2"></div>
+
+                    <div className="glass-card w-full max-w-md p-8 md:p-10 relative z-10 fade-in">
+                        <div className="text-center mb-10">
+                            <div className="w-16 h-16 bg-gradient-to-tr from-brand to-brand-accent rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-neon">
+                                <span className="text-3xl">🍦</span>
+                            </div>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Murlidhar POS</h1>
+                            <p className="text-gray-400">Secure Access Terminal</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-300">Select Staff</label>
+                                <select className="w-full p-4 bg-dark-800 border border-dark-700 rounded-xl text-white focus:border-brand transition" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+                                    <option value="" className="text-gray-500">-- Choose Account --</option>
+                                    {users.map(u => <option key={u.id} value={u.name} disabled={Number(u.locked) === 1} className="bg-dark-800">{u.name} ({u.role}) {Number(u.locked) === 1 ? '🔒 Locked' : ''}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-300">Security PIN</label>
+                                <input type="password" maxLength="4" className="w-full p-4 text-center text-3xl tracking-[1em] bg-dark-800 border border-dark-700 rounded-xl text-white focus:border-brand transition" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="••••" />
+                            </div>
+                            {(error || apiError) && <p className="text-rose-400 text-sm text-center bg-rose-500/10 p-3 rounded-lg border border-rose-500/20">{error || apiError}</p>}
+                            <button type="submit" className="w-full bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white font-bold py-4 rounded-xl transition transform hover:scale-[1.02] flex justify-center items-center gap-2 text-lg">
+                                <i data-lucide="log-in"></i> Access Terminal
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- USER OVERVIEW COMPONENT ---
+        const UserOverview = ({ user, transactions }) => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const myTx = transactions.filter(t => t.employeeName === user.name);
+            const myTodayTx = myTx.filter(t => t.date.startsWith(todayStr));
+
+            const totalSales = myTx.reduce((s, t) => s + Number(t.total), 0);
+            const todaySales = myTodayTx.reduce((s, t) => s + Number(t.total), 0);
+            const commRate = Number(user.commission) || 0;
+            const totalComm = totalSales * (commRate / 100);
+            const todayComm = todaySales * (commRate / 100);
+
+            return (
+                <div className="p-6 md:p-8 fade-in h-full overflow-y-auto">
+                    <h2 className="text-3xl font-bold text-white mb-2">My Dashboard</h2>
+                    <p className="text-gray-400 mb-8">Welcome back, {user.name}</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="glass-card p-6 rounded-2xl relative overflow-hidden group">
+                            <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl group-hover:bg-emerald-500/30 transition"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-4 text-emerald-400"><i data-lucide="calendar"></i><span className="font-semibold">Today's Performance</span></div>
+                                <div className="space-y-1"><p className="text-sm text-gray-400">Commission Earned</p><p className="text-4xl font-bold text-white">₹{todayComm.toFixed(2)}</p></div>
+                                <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Total Sales</p><p className="text-xl font-bold text-gray-200">₹{todaySales}</p></div>
+                            </div>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl relative overflow-hidden group">
+                             <div className="absolute -right-6 -top-6 w-24 h-24 bg-brand-accent/20 rounded-full blur-xl group-hover:bg-brand-accent/30 transition"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-4 text-brand-accent"><i data-lucide="trending-up"></i><span className="font-semibold">All-Time Stats</span></div>
+                                <div className="space-y-1"><p className="text-sm text-gray-400">Total Commission</p><p className="text-4xl font-bold text-white">₹{totalComm.toFixed(2)}</p></div>
+                                <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Lifetime Sales</p><p className="text-xl font-bold text-gray-200">₹{totalSales}</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="glass-card rounded-2xl p-6 border border-brand/20">
+                        <h3 className="font-bold text-lg text-white mb-4">Rate Card</h3>
+                        <div className="flex items-center justify-between p-4 bg-dark-800/50 rounded-xl border border-dark-700">
+                            <span className="text-gray-400">Your Commission Rate</span>
+                            <span className="text-3xl font-bold text-brand">{commRate}%</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. POS COMPONENT (Refined UI)
+        const POS = ({ user, users, products, onLogout, onCheckout, transactions, onUpdateTransaction }) => {
+            useIcons();
+            const [view, setView] = useState('pos'); 
+            const [cart, setCart] = useState([]); 
+            const [search, setSearch] = useState('');
+            const [showHistory, setShowHistory] = useState(false); 
+            const [editingTx, setEditingTx] = useState(null);
+            
+            const liveUserStatus = users.find(u => u.id === user.id);
+            if (liveUserStatus && Number(liveUserStatus.locked) === 1) return <div className="fixed inset-0 bg-dark-900 z-50 flex flex-col items-center justify-center text-center p-4"><h1 className="text-4xl font-bold text-white mb-4">Account Locked</h1><p className="text-gray-400 mb-8">Please contact administrator.</p><button onClick={() => window.location.reload()} className="px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-white transition">Refresh System</button></div>;
+            
+            const addToCart = (product) => setCart(prev => { const existing = prev.find(item => item.id === product.id); if (existing) return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item); return [...prev, { ...product, qty: 1 }]; });
+            const updateQty = (id, delta) => setCart(prev => prev.map(item => { if (item.id === id) { const newQty = item.qty + delta; return newQty > 0 ? { ...item, qty: newQty } : null; } return item; }).filter(Boolean));
+            const updateQtyManual = (id, value) => { const newQty = parseInt(value); if(newQty > 0) { setCart(prev => prev.map(item => item.id === id ? { ...item, qty: newQty } : item)); }};
+            const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+            const handlePrint = () => { window.print(); };
+            
+            const userHistory = transactions.filter(t => t.employeeName === user.name).sort((a,b) => b.id - a.id); 
+            const groupedHistory = userHistory.reduce((acc, tx) => { try { const day = tx.date.split(' ')[0]; if(!acc[day]) acc[day] = []; acc[day].push(tx); return acc; } catch(e) { return acc; } }, {});
+
+            return (
+                <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-dark-900 relative">
+                    {editingTx && <EditTransactionModal transaction={editingTx} onClose={() => setEditingTx(null)} onSave={(id, items, total) => { onUpdateTransaction(id, items, total); setEditingTx(null); }} />}
+
+                    {view === 'dashboard' && <div className="absolute inset-0 z-40 bg-dark-900 flex flex-col fade-in"><div className="glass p-4 md:px-8 flex justify-between items-center border-b border-dark-700"><h2 className="text-xl font-bold text-white">Staff Portal</h2><button onClick={() => setView('pos')} className="px-5 py-2 bg-dark-800 hover:bg-dark-700 rounded-lg text-gray-300 font-bold transition border border-dark-700">Back to POS</button></div><div className="flex-1 overflow-hidden"><UserOverview user={user} transactions={transactions} /></div></div>}
+
+                    {showHistory && (
+                        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                            <div className="glass-card w-full max-w-2xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-dark-700">
+         };
         
         const useIcons = (deps = []) => {
             useEffect(() => { try { lucide.createIcons(); } catch (e) {} }, deps);
@@ -943,4 +1129,5 @@
         root.render(<App />);
     </script>
 </body>
+
 </html>
