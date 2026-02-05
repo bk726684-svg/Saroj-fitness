@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Murlidhar Icecream POS (Modern - Offline)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        dark: {
+                            900: '#0f172a', // Main Background
+                            800: '#1e293b', // Card Background
+                            700: '#334155', // Borders
+                        },
+                        brand: {
+                            DEFAULT: '#d946ef', // Fuchsia-500
+                            hover: '#c026d3',   // Fuchsia-600
+                            accent: '#06b6d4',  // Cyan-500
+                        }
+                    },
+                    boxShadow: {
+                        'neon': '0 0 10px rgba(217, 70, 239, 0.5)',
+                        'glow': '0 0 20px rgba(6, 182, 212, 0.3)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; padding: 0; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d946ef; }
+
+        /* Glassmorphism Utilities */
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .glass-card {
+            background: linear-gradient(145deg, rgba(30,41,59,0.9) 0%, rgba(15,23,42,0.95) 100%);
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Animations */
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; opacity: 0; transform: translateY(10px); }
+        .fade-in-delay-1 { animation-delay: 0.1s; }
+        .fade-in-delay-2 { animation-delay: 0.2s; }
+        
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+
+        /* Modal & Toast */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 60; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: #1e293b; padding: 25px; border-radius: 20px; width: 90%; max-width: 500px; max-height: 85vh; overflow-y: auto; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); animation: fadeIn 0.3s; }
+
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; padding: 20px; color: black !important; }
+            #print-area h1, #print-area h3, #print-area th, #print-area td { color: black !important; }
+        }
+        #loading-screen { position: fixed; inset: 0; background: #0f172a; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        /* Input Styling Reset */
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #d946ef; box-shadow: 0 0 0 2px rgba(217, 70, 239, 0.2); }
+    </style>
+</head>
+<body>
+    <div id="error-display"></div>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Helper Components ---
+        const Toast = ({ message, type, onClose }) => {
+            useEffect(() => { const timer = setTimeout(onClose, 3000); return () => clearTimeout(timer); }, [onClose]);
+            const bg = type === 'success' ? 'bg-emerald-500' : 'bg-rose-500';
+            return <div className={`fixed top-5 right-5 ${bg} text-white px-6 py-3 rounded-xl shadow-xl z-50 flex items-center gap-3 fade-in border border-white/20`}>
+                <i data-lucide={type === 'success' ? 'check-circle' : 'alert-circle'}></i><span className="font-medium">{message}</span>
+            </div>;
+        };
+        
+        const useIcons = (deps = []) => {
+            useEffect(() => { try { lucide.createIcons(); } catch (e) {} }, deps);
+        };
+
+        // --- EDIT TRANSACTION MODAL (Updated UI) ---
+        const EditTransactionModal = ({ transaction, onSave, onClose }) => {
+            const [items, setItems] = useState(JSON.parse(JSON.stringify(transaction.items)));
+            const total = items.reduce((sum, item) => sum + (Number(item.price) * item.qty), 0);
+
+            const updateQty = (idx, delta) => {
+                const newItems = [...items];
+                newItems[idx].qty += delta;
+                if (newItems[idx].qty <= 0) {
+                    if(confirm("Remove this item?")) newItems.splice(idx, 1);
+                    else newItems[idx].qty = 1;
+                }
+                setItems(newItems);
+            };
+
+            const handleSave = () => {
+                if(items.length === 0) return alert("Order cannot be empty!");
+                onSave(transaction.id, items, total);
+            };
+
+            return (
+                <div className="modal-overlay" onClick={onClose}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-700">
+                            <h3 className="text-xl font-bold text-white">Edit Order #{transaction.id}</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-white transition"><i data-lucide="x"></i></button>
+                        </div>
+                        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                            {items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center bg-dark-800/50 p-4 rounded-xl border border-dark-700">
+                                    <div>
+                                        <p className="font-bold text-white">{item.name}</p>
+                                        <p className="text-sm text-gray-400">₹{item.price}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button onClick={() => updateQty(idx, -1)} className="w-8 h-8 bg-dark-700 hover:bg-rose-500/20 hover:text-rose-500 rounded-lg text-white font-bold transition">-</button>
+                                        <span className="font-bold w-6 text-center text-white">{item.qty}</span>
+                                        <button onClick={() => updateQty(idx, 1)} className="w-8 h-8 bg-dark-700 hover:bg-emerald-500/20 hover:text-emerald-500 rounded-lg text-white font-bold transition">+</button>
+                                    </div>
+                                    <div className="font-bold text-brand w-16 text-right">₹{item.price * item.qty}</div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-8 pt-4 border-t border-gray-700 flex justify-between items-center">
+                            <div>
+                                <p className="text-xs text-gray-400 uppercase tracking-wider">New Total</p>
+                                <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-brand to-brand-accent">₹{total}</p>
+                            </div>
+                            <button onClick={handleSave} className="bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white px-8 py-3 rounded-xl font-bold transition transform hover:scale-105">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 1. LOGIN COMPONENT (Modern UI)
+        const Login = ({ onLogin, users, apiError }) => {
+            useIcons();
+            const [selectedUser, setSelectedUser] = useState('');
+            const [pin, setPin] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+                if (!selectedUser) return setError('Please select a user.');
+                if (pin.length !== 4) return setError('PIN must be 4 digits.');
+                onLogin(selectedUser, pin);
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-dark-900 relative overflow-hidden p-4">
+                    {/* Background Blobs */}
+                    <div className="absolute top-0 left-0 w-96 h-96 bg-brand/20 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="absolute bottom-0 right-0 w-96 h-96 bg-brand-accent/20 rounded-full blur-[100px] translate-x-1/2 translate-y-1/2"></div>
+
+                    <div className="glass-card w-full max-w-md p-8 md:p-10 relative z-10 fade-in">
+                        <div className="text-center mb-10">
+                            <div className="w-16 h-16 bg-gradient-to-tr from-brand to-brand-accent rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-neon">
+                                <span className="text-3xl">🍦</span>
+                            </div>
+                            <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Murlidhar POS</h1>
+                            <p className="text-gray-400">Secure Access Terminal</p>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-300">Select Staff</label>
+                                <select className="w-full p-4 bg-dark-800 border border-dark-700 rounded-xl text-white focus:border-brand transition" value={selectedUser} onChange={(e) => setSelectedUser(e.target.value)}>
+                                    <option value="" className="text-gray-500">-- Choose Account --</option>
+                                    {users.map(u => <option key={u.id} value={u.name} disabled={Number(u.locked) === 1} className="bg-dark-800">{u.name} ({u.role}) {Number(u.locked) === 1 ? '🔒 Locked' : ''}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-300">Security PIN</label>
+                                <input type="password" maxLength="4" className="w-full p-4 text-center text-3xl tracking-[1em] bg-dark-800 border border-dark-700 rounded-xl text-white focus:border-brand transition" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="••••" />
+                            </div>
+                            {(error || apiError) && <p className="text-rose-400 text-sm text-center bg-rose-500/10 p-3 rounded-lg border border-rose-500/20">{error || apiError}</p>}
+                            <button type="submit" className="w-full bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white font-bold py-4 rounded-xl transition transform hover:scale-[1.02] flex justify-center items-center gap-2 text-lg">
+                                <i data-lucide="log-in"></i> Access Terminal
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- USER OVERVIEW COMPONENT ---
+        const UserOverview = ({ user, transactions }) => {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const myTx = transactions.filter(t => t.employeeName === user.name);
+            const myTodayTx = myTx.filter(t => t.date.startsWith(todayStr));
+
+            const totalSales = myTx.reduce((s, t) => s + Number(t.total), 0);
+            const todaySales = myTodayTx.reduce((s, t) => s + Number(t.total), 0);
+            const commRate = Number(user.commission) || 0;
+            const totalComm = totalSales * (commRate / 100);
+            const todayComm = todaySales * (commRate / 100);
+
+            return (
+                <div className="p-6 md:p-8 fade-in h-full overflow-y-auto">
+                    <h2 className="text-3xl font-bold text-white mb-2">My Dashboard</h2>
+                    <p className="text-gray-400 mb-8">Welcome back, {user.name}</p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="glass-card p-6 rounded-2xl relative overflow-hidden group">
+                            <div className="absolute -right-6 -top-6 w-24 h-24 bg-emerald-500/20 rounded-full blur-xl group-hover:bg-emerald-500/30 transition"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-4 text-emerald-400"><i data-lucide="calendar"></i><span className="font-semibold">Today's Performance</span></div>
+                                <div className="space-y-1"><p className="text-sm text-gray-400">Commission Earned</p><p className="text-4xl font-bold text-white">₹{todayComm.toFixed(2)}</p></div>
+                                <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Total Sales</p><p className="text-xl font-bold text-gray-200">₹{todaySales}</p></div>
+                            </div>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl relative overflow-hidden group">
+                             <div className="absolute -right-6 -top-6 w-24 h-24 bg-brand-accent/20 rounded-full blur-xl group-hover:bg-brand-accent/30 transition"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-3 mb-4 text-brand-accent"><i data-lucide="trending-up"></i><span className="font-semibold">All-Time Stats</span></div>
+                                <div className="space-y-1"><p className="text-sm text-gray-400">Total Commission</p><p className="text-4xl font-bold text-white">₹{totalComm.toFixed(2)}</p></div>
+                                <div className="mt-4 pt-4 border-t border-gray-700"><p className="text-sm text-gray-400">Lifetime Sales</p><p className="text-xl font-bold text-gray-200">₹{totalSales}</p></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="glass-card rounded-2xl p-6 border border-brand/20">
+                        <h3 className="font-bold text-lg text-white mb-4">Rate Card</h3>
+                        <div className="flex items-center justify-between p-4 bg-dark-800/50 rounded-xl border border-dark-700">
+                            <span className="text-gray-400">Your Commission Rate</span>
+                            <span className="text-3xl font-bold text-brand">{commRate}%</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. POS COMPONENT (Refined UI)
+        const POS = ({ user, users, products, onLogout, onCheckout, transactions, onUpdateTransaction }) => {
+            useIcons();
+            const [view, setView] = useState('pos'); 
+            const [cart, setCart] = useState([]); 
+            const [search, setSearch] = useState('');
+            const [showHistory, setShowHistory] = useState(false); 
+            const [editingTx, setEditingTx] = useState(null);
+            
+            const liveUserStatus = users.find(u => u.id === user.id);
+            if (liveUserStatus && Number(liveUserStatus.locked) === 1) return <div className="fixed inset-0 bg-dark-900 z-50 flex flex-col items-center justify-center text-center p-4"><h1 className="text-4xl font-bold text-white mb-4">Account Locked</h1><p className="text-gray-400 mb-8">Please contact administrator.</p><button onClick={() => window.location.reload()} className="px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl text-white transition">Refresh System</button></div>;
+            
+            const addToCart = (product) => setCart(prev => { const existing = prev.find(item => item.id === product.id); if (existing) return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item); return [...prev, { ...product, qty: 1 }]; });
+            const updateQty = (id, delta) => setCart(prev => prev.map(item => { if (item.id === id) { const newQty = item.qty + delta; return newQty > 0 ? { ...item, qty: newQty } : null; } return item; }).filter(Boolean));
+            const updateQtyManual = (id, value) => { const newQty = parseInt(value); if(newQty > 0) { setCart(prev => prev.map(item => item.id === id ? { ...item, qty: newQty } : item)); }};
+            const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+            const handlePrint = () => { window.print(); };
+            
+            const userHistory = transactions.filter(t => t.employeeName === user.name).sort((a,b) => b.id - a.id); 
+            const groupedHistory = userHistory.reduce((acc, tx) => { try { const day = tx.date.split(' ')[0]; if(!acc[day]) acc[day] = []; acc[day].push(tx); return acc; } catch(e) { return acc; } }, {});
+
+            return (
+                <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-dark-900 relative">
+                    {editingTx && <EditTransactionModal transaction={editingTx} onClose={() => setEditingTx(null)} onSave={(id, items, total) => { onUpdateTransaction(id, items, total); setEditingTx(null); }} />}
+
+                    {view === 'dashboard' && <div className="absolute inset-0 z-40 bg-dark-900 flex flex-col fade-in"><div className="glass p-4 md:px-8 flex justify-between items-center border-b border-dark-700"><h2 className="text-xl font-bold text-white">Staff Portal</h2><button onClick={() => setView('pos')} className="px-5 py-2 bg-dark-800 hover:bg-dark-700 rounded-lg text-gray-300 font-bold transition border border-dark-700">Back to POS</button></div><div className="flex-1 overflow-hidden"><UserOverview user={user} transactions={transactions} /></div></div>}
+
+                    {showHistory && (
+                        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+                            <div className="glass-card w-full max-w-2xl h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-dark-700">
+                                <div className="p-6 border-b border-dark-700 flex justify-between items-center bg-dark-800/50"><h2 className="text-2xl font-bold text-white">Sales History</h2><button onClick={() => setShowHistory(false)} className="p-2 bg-dark-700 hover:bg-rose-500 rounded-full transition text-white"><i data-lucide="x"></i></button></div>
+                                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+                                    {Object.keys(groupedHistory).length === 0 && <p className="text-center text-gray-500 mt-20">No sales recorded yet.</p>}
+                                    {Object.keys(groupedHistory).map(date => (
+                                        <div key={date}>
+                                            <h3 className="text-sm font-bold text-brand bg-brand/10 inline-block px-4 py-1.5 rounded-lg mb-3 border border-brand/20">{date}</h3>
+                                            <div className="space-y-2">
+                                                {groupedHistory[date].map(tx => (
+                                                    <div key={tx.id} className="bg-dark-800/50 border border-dark-700 rounded-xl p-4 flex justify-between items-center hover:bg-dark-800 transition">
+                                                        <div>
+                                                            <span className="font-bold text-lg text-white block">₹{tx.total}</span>
+                                                            <span className="text-sm font-mono text-brand-accent bg-dark-900 px-2 py-1 rounded border border-dark-700">{tx.date.split(' ')[1]}</span>
+                                                        </div>
+                                                        <button onClick={() => setEditingTx(tx)} className="bg-brand/10 text-brand hover:bg-brand hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition flex items-center gap-2">
+                                                            <i data-lucide="edit-2" width="16"></i> Edit
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Main Product Grid */}
+                    <div className="flex-1 flex flex-col h-full bg-dark-900">
+                        <header className="glass p-4 md:px-6 flex justify-between items-center z-10 border-b border-dark-700/50">
+                            <div><h2 className="text-2xl font-bold text-white tracking-tight">Terminal</h2><p className="text-sm text-gray-400">Operator: <span className="text-brand font-bold">{user.name}</span></p></div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setView('dashboard')} className="p-2 md:px-4 bg-dark-800 hover:bg-brand hover:text-white text-gray-300 hover:shadow-neon rounded-lg transition flex items-center gap-2 text-sm font-medium"><i data-lucide="layout-dashboard" width="18"></i> <span className="hidden md:inline">Dashboard</span></button>
+                                <button onClick={() => setShowHistory(true)} className="p-2 md:px-4 bg-dark-800 hover:bg-brand-accent hover:text-white text-gray-300 hover:shadow-glow rounded-lg transition flex items-center gap-2 text-sm font-medium"><i data-lucide="history" width="18"></i> <span className="hidden md:inline">History</span></button>
+                                <button onClick={onLogout} className="p-2 text-rose-400 hover:text-rose-500 transition"><i data-lucide="log-out"></i></button>
+                            </div>
+                        </header>
+                        <div className="p-4 md:p-6 flex-1 overflow-y-auto custom-scrollbar">
+                            <div className="mb-6 relative"><i data-lucide="search" className="absolute left-4 top-3.5 text-gray-500"></i><input type="text" placeholder="Search icecreams..." className="w-full pl-12 pr-4 py-3 bg-dark-800 border border-dark-700 rounded-xl text-white placeholder-gray-500 focus:border-brand transition" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                {filteredProducts.map(p => (
+                                    <button key={p.id} onClick={() => addToCart(p)} className="group bg-dark-800 border border-dark-700 hover:border-brand/50 hover:shadow-neon p-5 rounded-2xl transition flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+                                        {p.image ? <img src={p.image} className="w-16 h-16 object-cover rounded-full mb-2 group-hover:scale-110 transition duration-300" onError={(e)=>e.target.style.display='none'} /> : <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-2 bg-gradient-to-br from-brand/20 to-brand-accent/20 group-hover:from-brand/40 group-hover:to-brand-accent/40 transition">🍦</div>}
+                                        <div className="text-center w-full z-10"><h3 className="font-semibold text-gray-200 text-sm truncate group-hover:text-white">{p.name}</h3><p className="text-brand font-bold mt-1 group-hover:scale-110 transition inline-block">₹{p.price}</p></div>
+                                        <div className="absolute inset-0 bg-brand/5 opacity-0 group-hover:opacity-100 transition pointer-events-none"></div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Cart Sidebar */}
+                    <div className="w-full md:w-[400px] bg-dark-800 border-l border-dark-700 flex flex-col h-[40vh] md:h-full z-20 shadow-2xl relative">
+                        <div className="p-5 border-b border-dark-700 bg-dark-900/50 flex justify-between items-center"><h3 className="font-bold text-lg text-white">Current Order</h3><span className="bg-brand/20 text-brand px-3 py-1 rounded-lg text-xs font-bold border border-brand/20">{cart.length} Items</span></div>
+                        <div className="flex-1 overflow-y-auto p-5 space-y-3 custom-scrollbar">
+                            {cart.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50"><i data-lucide="shopping-bag" className="w-12 h-12 mb-3"></i><p className="font-medium">Cart is empty</p></div> : 
+                                cart.map(item => (
+                                    <div key={item.id} className="flex justify-between items-center bg-dark-900/80 p-3 rounded-xl border border-dark-700/50">
+                                        <div className="flex-1 pr-3"><p className="font-medium text-gray-200 text-sm truncate">{item.name}</p><p className="text-xs text-gray-500">₹{item.price} x {item.qty}</p></div>
+                                        <div className="flex items-center gap-2 bg-dark-800 rounded-lg p-1 border border-dark-700">
+                                            <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 rounded bg-dark-700 hover:bg-rose-500/20 hover:text-rose-500 text-gray-400 flex items-center justify-center transition">-</button>
+                                            <input type="number" value={item.qty} onChange={(e) => updateQtyManual(item.id, e.target.value)} className="w-8 text-center text-sm bg-transparent outline-none font-bold text-white" min="1" />
+                                            <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 rounded bg-dark-700 hover:bg-emerald-500/20 hover:text-emerald-500 text-gray-400 flex items-center justify-center transition">+</button>
+                                        </div>
+                                    </div>
+                                ))
+                            }
+                        </div>
+                        <div className="p-6 bg-dark-900 border-t border-dark-700 space-y-4">
+                            <div className="flex justify-between items-end"><span className="text-gray-400 font-medium">Total Amount</span><span className="text-3xl font-bold text-white">₹{totalAmount}</span></div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={handlePrint} disabled={cart.length === 0} className="w-full bg-dark-700 hover:bg-dark-600 text-gray-300 font-bold py-3.5 rounded-xl transition flex justify-center items-center gap-2 border border-dark-600"><i data-lucide="printer"></i> Print</button>
+                                <button onClick={() => onCheckout(cart, totalAmount)} disabled={cart.length === 0} className="w-full bg-gradient-to-r from-brand to-brand-accent hover:shadow-neon text-white font-bold py-3.5 rounded-xl transition transform hover:scale-[1.02] flex justify-center items-center gap-2"><i data-lucide="check-circle"></i> Save</button>
+                            </div>
+                        </div>
+                        <div id="print-area" className="hidden">
+                            <div style={{textAlign: 'center', marginBottom: '20px'}}><h1 style={{fontSize: '24px', fontWeight: 'bold', margin: 0}}>MURLIDHAR ICECREAM</h1></div>
+                            <div style={{borderBottom: '1px dashed #ccc', marginBottom: '10px', paddingBottom: '10px'}}><p><strong>Date:</strong> {new Date().toLocaleDateString()}</p><p><strong>Operator:</strong> {user.name}</p></div>
+                            <table style={{width: '100%', borderCollapse: 'collapse', marginBottom: '20px', fontSize: '14px'}}><thead><tr style={{borderBottom: '2px solid #000'}}><th style={{textAlign: 'left'}}>Item</th><th style={{textAlign: 'right'}}>Total</th></tr></thead><tbody>{cart.map((item, idx) => (<tr key={idx}><td style={{padding: '5px 0'}}>{item.name} x {item.qty}</td><td style={{textAlign: 'right'}}>₹{item.price * item.qty}</td></tr>))}</tbody></table>
+                            <div style={{textAlign: 'right', fontSize: '18px', fontWeight: 'bold', borderTop: '2px solid #000', paddingTop: '10px'}}>TOTAL: ₹{totalAmount}</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. OVERVIEW TAB (Dashboard UI)
+        const OverviewTab = ({ transactions, users, returns, products, expenses }) => {
+            useIcons();
+            const chart1 = useRef(null); 
+            const colorPalette = ['#d946ef', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6']; // Updated colors
+            const todayStr = new Date().toISOString().split('T')[0];
+            
+            const safeUsers = Array.isArray(users) ? users : [];
+            const safeReturns = Array.isArray(returns) ? returns : [];
+            const safeTx = Array.isArray(transactions) ? transactions : [];
+            const safeExp = Array.isArray(expenses) ? expenses : [];
+
+            const totalIncome = safeTx.reduce((sum, t) => sum + Number(t.total), 0);
+            const totalOwnerExpenses = safeExp.reduce((sum, e) => sum + Number(e.amount), 0);
+
+            const analytics = safeUsers.filter(u => u.role !== 'admin').map(u => {
+                const empTx = safeTx.filter(t => t.employeeName === u.name);
+                const totalSales = empTx.reduce((s,t) => s + Number(t.total), 0);
+                const userReturns = safeReturns.filter(r => r.userName === u.name && r.date === todayStr);
+                const totalReturnVal = userReturns.reduce((s,r) => {
+                    let val = Number(r.amount) || 0; 
+                    const bearer = r.costBearer || '100_owner';
+                    if(bearer === '100_owner') return s;
+                    if(bearer === '50_50') return s + (val * 0.5);
+                    return s + val;
+                }, 0);
+                const netSales = totalSales - totalReturnVal;
+                const comm = netSales * (Number(u.commission)/100);
+                return { name: u.name, totalSales, netSales, totalReturnVal, comm };
+            });
+            const totalComm = analytics.reduce((s,a) => s + a.comm, 0);
+            const netProfit = totalIncome - (totalOwnerExpenses + totalComm);
+
+            useEffect(() => { 
+                try {
+                    if(window.c1) { window.c1.destroy(); window.c1 = null; }
+                    if(chart1.current && analytics.length > 0) {
+                        Chart.defaults.color = '#94a3b8';
+                        Chart.defaults.borderColor = '#334155';
+                        window.c1 = new Chart(chart1.current, { 
+                            type: 'bar', 
+                            data: { labels: analytics.map(e => e.name), datasets: [{ label: 'Net Sales (₹)', data: analytics.map(e => e.netSales), backgroundColor: analytics.map((_, i) => colorPalette[i % colorPalette.length]), borderRadius: 6, barThickness: 40 }] }, 
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#334155' } }, x: { grid: { display: false } } } }
+                        }); 
+                    }
+                } catch (e) {}
+            }, [transactions]);
+
+            return (
+                <div className="space-y-6 fade-in">
+                    <div className="flex justify-between items-end mb-2">
+                        <h2 className="text-2xl font-bold text-white">Business Overview</h2>
+                        <span className="text-sm text-brand-accent bg-brand-accent/10 px-3 py-1 rounded-lg border border-brand-accent/20">Live Data</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-card p-6 rounded-2xl border-l-4 border-emerald-500">
+                            <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Total Income</p>
+                            <h3 className="text-3xl font-bold text-white">₹{totalIncome}</h3>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl border-l-4 border-rose-500">
+                            <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Expenses & Deductions</p>
+                            <h3 className="text-3xl font-bold text-white">₹{(totalOwnerExpenses + totalComm).toFixed(2)}</h3>
+                        </div>
+                        <div className={`glass-card p-6 rounded-2xl border-l-4 ${netProfit >= 0 ? 'border-brand-accent' : 'border-rose-500'}`}>
+                            <p className="text-gray-400 text-sm uppercase tracking-wider mb-1">Net Profit</p>
+                            <h3 className={`text-3xl font-bold ${netProfit >= 0 ? 'text-brand-accent' : 'text-rose-500'}`}>₹{netProfit.toFixed(2)}</h3>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="glass-card p-6 rounded-2xl h-[450px] overflow-y-auto">
+                            <h3 className="font-bold text-white mb-6 text-lg">Staff Performance</h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm whitespace-nowrap">
+                                    <thead><tr className="border-b border-dark-700 text-gray-500 text-xs uppercase tracking-wider"><th className="pb-3 pl-2">Employee</th><th className="pb-3 text-right">Sales</th><th className="pb-3 text-right text-rose-400">Deduct</th><th className="pb-3 text-right text-brand">Comm</th></tr></thead>
+                                    <tbody>{analytics.map(u => <tr key={u.name} className="border-b border-dark-700/50 last:border-0 hover:bg-dark-800/50 transition"><td className="py-4 pl-2 font-bold text-gray-200">{u.name}</td><td className="py-4 text-right pr-2 text-emerald-400">+₹{u.totalSales}</td><td className="py-4 text-right pr-2 text-rose-400">-₹{u.totalReturnVal.toFixed(2)}</td><td className="py-4 text-right pr-2 font-bold text-brand">₹{u.comm.toFixed(2)}</td></tr>)}</tbody>
+                                </table>
+                            </div>
+                            <div className="mt-6 pt-4 border-t border-dark-700 text-right"><span className="text-sm text-gray-400 mr-2">Total Payout: </span><span className="text-xl font-bold text-white">₹{totalComm.toFixed(2)}</span></div>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl h-[450px] flex flex-col"><h3 className="font-bold text-white mb-4 text-lg">Sales Visualization</h3><div className="flex-1 relative"><canvas ref={chart1}></canvas></div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. POPULAR ITEMS (UI Updated)
+        const PopularItemsTab = ({ transactions }) => {
+            useIcons();
+            const chartRef = useRef(null);
+            const itemCounts = {}; 
+            transactions.forEach(t => { if(Array.isArray(t.items)) t.items.forEach(i => itemCounts[i.name] = (itemCounts[i.name] || 0) + i.qty); });
+            const popularItems = Object.keys(itemCounts).map(k => ({ name: k, qty: itemCounts[k] })).sort((a,b) => b.qty - a.qty);
+
+            useEffect(() => {
+                try {
+                    if(window.cPie) window.cPie.destroy();
+                    if(chartRef.current && popularItems.length > 0) {
+                        Chart.defaults.color = '#cbd5e1';
+                        window.cPie = new Chart(chartRef.current, { type: 'doughnut', data: { labels: popularItems.map(i => i.name), datasets: [{ data: popularItems.map(i => i.qty), backgroundColor: ['#d946ef', '#fbbf24', '#8b5cf6', '#f97316', '#10b981', '#06b6d4'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'right' } } } });
+                    }
+                } catch(e) {}
+            }, [transactions]);
+
+            return (
+                <div className="space-y-6 fade-in">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="glass-card p-6 rounded-2xl min-h-[400px]">
+                            <h3 className="font-bold text-white mb-6 text-lg">Top Sellers</h3>
+                            <div className="space-y-0 overflow-y-auto max-h-[400px] custom-scrollbar">
+                                {popularItems.map((item, idx) => (
+                                    <div key={item.name} className={`flex justify-between items-center py-4 border-b border-dark-700/50 ${idx === 0 ? 'text-brand-accent font-bold text-lg' : 'text-gray-300'}`}>
+                                        <span className="flex items-center gap-3">
+                                            <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs ${idx < 3 ? 'bg-brand text-white' : 'bg-dark-700 text-gray-500'}`}>{idx+1}</span>
+                                            {item.name}
+                                        </span>
+                                        <span className={`font-bold ${idx === 0 ? 'text-brand-accent' : 'text-gray-500'}`}>{item.qty} sold</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="glass-card p-6 rounded-2xl min-h-[400px] flex items-center justify-center"><div className="w-full h-80 relative"><canvas ref={chartRef}></canvas></div></div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. HISTORY TAB (UI Updated)
+        const SalesHistoryTab = ({ transactions }) => {
+            useIcons();
+            const [expandedId, setExpandedId] = useState(null);
+            return (
+                <div className="glass-card rounded-2xl overflow-hidden fade-in border border-dark-700">
+                    <table className="w-full text-left">
+                        <thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Date</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Staff</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Total</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Action</th></tr></thead>
+                        <tbody className="divide-y divide-dark-700/50">{transactions.map(tx => (
+                            <React.Fragment key={tx.id}>
+                                <tr className="hover:bg-dark-800/50 transition"><td className="p-5 text-gray-300">{tx.date}</td><td className="p-5 text-white font-medium">{tx.employeeName}</td><td className="p-5 font-bold text-brand">₹{tx.total}</td><td className="p-5"><button onClick={()=>setExpandedId(expandedId===tx.id?null:tx.id)} className="px-4 py-1.5 bg-dark-700 hover:bg-dark-600 text-gray-300 rounded-lg text-sm transition border border-dark-600">View Items</button></td></tr>
+                                {expandedId === tx.id && <tr className="bg-dark-900/50"><td colSpan="4" className="p-5"><ul className="text-sm text-gray-400 space-y-2">{Array.isArray(tx.items)?tx.items.map((i,k)=><li key={k} className="flex justify-between border-b border-dark-800 pb-1"><span>{i.qty} x {i.name}</span><span>₹{i.price * i.qty}</span></li>):'Error'}</ul></td></tr>}
+                            </React.Fragment>
+                        ))}</tbody>
+                    </table>
+                </div>
+            );
+        };
+
+                // 6. RETURNS TAB (UPDATED FOR DARK MODE UI)
+        const ReturnsTab = ({ returns, products, users, actions, expenses }) => {
+            useIcons();
+            const [mode, setMode] = useState('item'); 
+            const [userId, setUserId] = useState(''); 
+            const [itemId, setItemId] = useState(''); 
+            const [qty, setQty] = useState(1);
+            const [bulkAmount, setBulkAmount] = useState('');
+            const [reason, setReason] = useState('Damage'); 
+            const [costBearer, setCostBearer] = useState('100_owner'); 
+
+            const handleAdd = (e) => {
+                e.preventDefault();
+                if(!userId) return alert("Please select an employee");
+                const user = users.find(u => u.id == userId);
+                let val = 0;
+                let returnObj = { userName: user.name, reason: reason, costBearer, isBulk: mode==='bulk'?1:0 };
+
+                if (mode === 'bulk') {
+                    val = parseFloat(bulkAmount);
+                    if(!val || val <= 0) return alert("Invalid amount");
+                    returnObj.amount = val;
+                } else {
+                    const product = products.find(p => p.id == itemId);
+                    if(!product) return alert("Select Item");
+                    val = product.price * parseInt(qty);
+                    returnObj.itemId = product.id; returnObj.itemName = product.name; returnObj.qty = qty; returnObj.amount = val;
+                }
+                
+                actions.addReturn(returnObj).then((res) => {
+                    if(res && res.status === 'success') {
+                        let ownerShare = 0;
+                        if(costBearer === '100_owner') ownerShare = val;
+                        else if(costBearer === '50_50') ownerShare = val * 0.5;
+                        
+                        if(ownerShare > 0) {
+                            // Passing expenses prop explicitly just in case, though it comes from parent usually
+                            // Assuming 'expenses' is available in props, if not we might need to access it from app state, 
+                            // but here we are passing actions which handles api call.
+                            actions.addExpense({ desc: `Return/Damage Share - ${user.name} (${costBearer})`, amount: ownerShare, isReturnLoss: 1, linkedReturnId: res.inserted_id }); 
+                        }
+                    }
+                });
+                setQty(1); setBulkAmount(''); setItemId('');
+            };
+
+            return (
+                <div className="space-y-6 fade-in">
+                    {/* FORM SECTION */}
+                    <div className="glass-card p-6 rounded-2xl border-l-4 border-rose-500 relative overflow-hidden">
+                        {/* Background Glow */}
+                        <div className="absolute -right-4 -top-4 w-24 h-24 bg-rose-500/20 rounded-full blur-2xl"></div>
+                        
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <h3 className="font-bold text-white text-lg">Log Return / Damage</h3>
+                            <div className="flex bg-dark-800 p-1 rounded-xl border border-dark-700">
+                                <button type="button" onClick={()=>setMode('item')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${mode==='item'?'bg-brand text-white shadow-neon':'text-gray-400 hover:text-white'}`}>Item</button>
+                                <button type="button" onClick={()=>setMode('bulk')} className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${mode==='bulk'?'bg-brand text-white shadow-neon':'text-gray-400 hover:text-white'}`}>Bulk Amount</button>
+                            </div>
+                        </div>
+                        
+                        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                            {/* Employee Selection */}
+                            <div className="md:col-span-1">
+                                <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Employee</label>
+                                <select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" onChange={e=>setUserId(e.target.value)}>
+                                    <option value="" className="text-gray-500">-- Select --</option>
+                                    {users.filter(u=>u.role!=='admin').map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
+                            </div>
+
+                            {/* Item Selection or Amount */}
+                            {mode === 'item' ? (
+                                <>
+                                    <div className="md:col-span-1">
+                                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Item</label>
+                                        <select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" onChange={e=>setItemId(e.target.value)}>
+                                            <option value="">-- Item --</option>
+                                            {products.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="md:col-span-1">
+                                        <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Qty</label>
+                                        <input type="number" min="1" className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" value={qty} onChange={e=>setQty(e.target.value)} />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="md:col-span-2">
+                                    <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Amount (₹)</label>
+                                    <input placeholder="Total Value" type="number" className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand outline-none transition" value={bulkAmount} onChange={e=>setBulkAmount(e.target.value)} />
+                                </div>
+                            )}
+
+                            {/* Type (Damage/Return) */}
+                            <div className="md:col-span-1">
+                                <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Reason</label>
+                                <select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-white font-bold focus:border-brand outline-none transition" value={reason} onChange={e=>setReason(e.target.value)}>
+                                    <option value="Damage">Damage (खराब)</option>
+                                    <option value="Returned">Return (वापसी)</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            {/* Cost Bearer */}
+                            <div className="md:col-span-1">
+                                <label className="text-xs font-bold text-gray-400 ml-1 uppercase tracking-wider">Who Pays?</label>
+                                <select className="w-full p-2.5 bg-dark-900 border border-dark-700 rounded-xl text-sm focus:border-brand outline-none transition" value={costBearer} onChange={e=>setCostBearer(e.target.value)}>
+                                    <option value="100_owner">Owner 100%</option>
+                                    <option value="50_50">50% - 50%</option>
+                                    <option value="100_emp">Emp 100%</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" className="md:col-span-5 bg-gradient-to-r from-rose-500 to-orange-600 hover:shadow-neon text-white px-6 py-2.5 rounded-xl font-bold transition transform hover:scale-[1.02]">
+                                Save Entry
+                            </button>
+                        </form>
+                    </div>
+
+                    {/* RETURNS LIST */}
+                    <div className="glass-card rounded-2xl overflow-hidden border border-dark-700">
+                        <table className="w-full text-left">
+                            <thead className="bg-dark-800 border-b border-dark-700">
+                                <tr>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Date</th>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider">User</th>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Item/Amount</th>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Type</th>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Cost On</th>
+                                    <th className="p-5 text-gray-400 text-xs uppercase tracking-wider text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                                {returns.map(r => (
+                                    <tr key={r.id} className="border-b border-dark-700/50 hover:bg-dark-800/50 transition">
+                                        <td className="p-5 text-gray-400">{r.date}</td>
+                                        <td className="p-5 font-bold text-white">{r.userName}</td>
+                                        <td className="p-5">
+                                            {r.isBulk == 1 ? 
+                                                <span className="text-white">Bulk: ₹{r.amount}</span> : 
+                                                <span>{r.itemName} <span className="text-gray-600">x</span> {r.qty} <span className="text-xs text-gray-600">(₹{r.amount})</span></span>
+                                            }
+                                        </td>
+                                        <td className="p-5">
+                                            <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                                                r.reason === 'Damage' ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 
+                                                r.reason === 'Returned' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 
+                                                'bg-gray-700/20 text-gray-400 border-gray-600/30'
+                                            }`}>
+                                                {r.reason === 'Damage' ? 'Damage (खराब)' : r.reason}
+                                            </span>
+                                        </td>
+                                        <td className="p-5">
+                                            <span className="text-xs bg-orange-500/10 text-orange-400 px-2 py-1 rounded border border-orange-500/20">
+                                                {r.costBearer === '100_owner' ? 'Owner' : r.costBearer === '100_emp' ? 'Employee' : '50/50'}
+                                            </span>
+                                        </td>
+                                        <td className="p-5 text-right">
+                                            <button onClick={()=>actions.deleteReturn(r.id)} className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 p-2 rounded transition"><i data-lucide="trash-2" width="16"></i></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {returns.length === 0 && <div className="p-8 text-center text-gray-500 bg-dark-800/20 rounded-xl">No returns or damages logged.</div>}
+                    </div>
+                </div>
+            );
+        };
+
+        // 7. EMPLOYEES TAB
+        const EmployeesTab = ({ users, actions }) => {
+            useIcons();
+            const [data, setData] = useState({ name: '', pin: '', comm: 0 });
+            return (<div className="space-y-6 fade-in">
+                <div className="glass-card p-6 rounded-2xl">
+                    <h3 className="font-bold text-white mb-4 text-lg">Add New Staff</h3>
+                    <div className="flex gap-4 flex-wrap">
+                        <input placeholder="Full Name" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition flex-1" onChange={e=>setData({...data, name:e.target.value})} />
+                        <input placeholder="PIN (4 digit)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition w-32" onChange={e=>setData({...data, pin:e.target.value})} />
+                        <input placeholder="Comm %" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition w-24" onChange={e=>setData({...data, comm:e.target.value})} />
+                        <button onClick={()=>actions.addUser({...data, role:'staff'})} className="bg-brand hover:bg-brand-hover text-white px-6 rounded-xl font-bold transition shadow-neon">Add Staff</button>
+                    </div>
+                </div>
+                <div className="glass-card rounded-2xl overflow-hidden border border-dark-700">
+                    <table className="w-full text-left"><thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Name</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Comm</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Status</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Actions</th></tr></thead><tbody className="divide-y divide-dark-700/50">{users.filter(u=>u.role!=='admin').map(u=>(<tr key={u.id} className="hover:bg-dark-800/50 transition"><td className="p-5 font-bold text-white">{u.name}</td><td className="p-5 text-brand-accent font-bold">{u.commission}% <button onClick={()=>actions.updateCommission(u.id)} className="ml-2 text-gray-500 hover:text-white transition opacity-50 hover:opacity-100"><i data-lucide="edit-2" width="14"></i></button></td><td className="p-5">{Number(u.locked)===1?<span className="bg-rose-500/20 text-rose-400 px-2 py-1 rounded text-xs font-bold border border-rose-500/30">Locked</span>:<span className="bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded text-xs font-bold border border-emerald-500/30">Active</span>}</td><td className="p-5 flex gap-3"><button onClick={()=>actions.toggleLock(u.id)} className="text-orange-400 hover:text-orange-300 transition"><i data-lucide={Number(u.locked)===1?'unlock':'lock'}></i></button><button onClick={()=>actions.updatePin(u.id)} className="text-brand hover:text-brand-accent transition"><i data-lucide="key" width="16"></i></button><button onClick={()=>actions.deleteUser(u.id)} className="text-rose-400 hover:text-rose-300 transition"><i data-lucide="trash-2" width="16"></i></button></td></tr>))}</tbody></table>
+                </div>
+            </div>);
+        };
+
+        // 8. EXPENSES TAB
+        const ExpensesTab = ({ expenses, actions }) => {
+            const [data, setData] = useState({ desc: '', amt: '' });
+            return (<div className="space-y-6 fade-in">
+                <div className="glass-card p-6 rounded-2xl border-l-4 border-orange-500">
+                    <h3 className="font-bold text-white mb-4 text-lg">Record Expense</h3>
+                    <div className="flex gap-4">
+                        <input placeholder="Description (e.g. Milk, Electricity)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-orange-500 transition flex-1" onChange={e=>setData({...data, desc:e.target.value})} />
+                        <input placeholder="Amount (₹)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-orange-500 transition w-40" onChange={e=>setData({...data, amt:e.target.value})} />
+                        <button onClick={()=>actions.addExpense(data)} className="bg-orange-500 hover:bg-orange-600 text-white px-6 rounded-xl font-bold transition shadow-lg">Add</button>
+                    </div>
+                </div>
+                <div className="glass-card rounded-2xl overflow-hidden border border-dark-700">
+                    <table className="w-full text-left"><thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Date</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Description</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Amount</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Action</th></tr></thead><tbody className="divide-y divide-dark-700/50">{expenses.map(e=>(<tr key={e.id} className="hover:bg-dark-800/50 transition"><td className="p-5 text-gray-300">{e.date}</td><td className="p-5 text-white font-medium">{e.description}</td><td className="p-5 text-rose-400 font-bold">-₹{e.amount}</td><td className="p-5 flex gap-3"><button onClick={()=>actions.editExpense(e.id, {desc: prompt('Description',e.description), amount: prompt('Amount',e.amount)})} className="text-brand hover:text-brand-accent transition"><i data-lucide="edit-2" width="16"></i></button><button onClick={()=>actions.deleteExpense(e.id)} className="text-rose-400 hover:text-rose-300 transition"><i data-lucide="trash-2" width="16"></i></button></td></tr>))}</tbody></table>
+                </div>
+            </div>);
+        };
+
+        // 9. MENU TAB
+        const MenuTab = ({ products, actions }) => {
+            const [data, setData] = useState({ name: '', price: '', image: '' });
+            return (<div className="space-y-6 fade-in">
+                <div className="glass-card p-6 rounded-2xl border-l-4 border-brand">
+                    <h3 className="font-bold text-white mb-4 text-lg">Add Product</h3>
+                    <div className="flex gap-4 flex-wrap">
+                        <input placeholder="Icecream Name" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition flex-1" onChange={e=>setData({...data, name:e.target.value})} />
+                        <input placeholder="Price (₹)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition w-32" onChange={e=>setData({...data, price:e.target.value})} />
+                        <input placeholder="Image URL (Optional)" className="p-3 bg-dark-900 border border-dark-700 rounded-xl text-white focus:border-brand transition flex-[2]" onChange={e=>setData({...data, image:e.target.value})} />
+                        <button onClick={()=>actions.addProduct(data)} className="bg-brand hover:bg-brand-hover text-white px-6 rounded-xl font-bold transition shadow-neon">Add Item</button>
+                    </div>
+                </div>
+                <div className="glass-card rounded-2xl overflow-hidden border border-dark-700">
+                    <table className="w-full text-left"><thead className="bg-dark-800 border-b border-dark-700"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Image</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Name</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Price</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Action</th></tr></thead><tbody className="divide-y divide-dark-700/50">{products.map(p=>(<tr key={p.id} className="hover:bg-dark-800/50 transition"><td className="p-5">{p.image?<img src={p.image} className="w-10 h-10 rounded-lg object-cover border border-dark-600"/>:'-'}</td><td className="p-5 font-bold text-white">{p.name}</td><td className="p-5 text-brand-accent font-bold">₹{p.price}</td><td className="p-5"><button onClick={()=>actions.deleteProduct(p.id)} className="text-rose-400 hover:text-rose-300 transition"><i data-lucide="trash-2"></i></button></td></tr>))}</tbody></table>
+                </div>
+            </div>);
+        };
+
+        // 10. ADMIN DASHBOARD
+        const AdminDashboard = ({ user, products, transactions, expenses, users, returns, actions }) => {
+            useIcons();
+            const [activeTab, setActiveTab] = useState('overview');
+            const [isMenuOpen, setIsMenuOpen] = useState(false);
+            const [editingTx, setEditingTx] = useState(null); 
+
+            const handleTabClick = (tab) => { setActiveTab(tab); setIsMenuOpen(false); };
+            const iconMap = { overview: 'layout-dashboard', popular: 'trending-up', history: 'history', returns: 'rotate-ccw', expenses: 'banknote', employees: 'users', menu: 'utensils' };
+
+            return (
+                <div className="min-h-screen bg-dark-900 flex relative text-gray-300">
+                    {editingTx && <EditTransactionModal transaction={editingTx} onClose={()=>setEditingTx(null)} onSave={(id, items, total) => { actions.updateTransaction(id, items, total); setEditingTx(null); }} />}
+                    
+                    {/* Mobile Overlay */}
+                    {isMenuOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden fade-in" onClick={() => setIsMenuOpen(false)}></div>}
+                    
+                    {/* Sidebar */}
+                    <div className={`w-72 bg-dark-900 border-r border-dark-800 flex flex-col h-screen fixed top-0 left-0 z-50 transform transition-transform duration-300 ease-in-out ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-2xl`}>
+                        <div className="p-8 flex justify-between items-center">
+                            <div>
+                                <h1 className="text-2xl font-bold text-white tracking-tight">Admin<span className="text-brand">.Panel</span></h1>
+                                <p className="text-xs text-gray-500 mt-1">Owner Mode</p>
+                            </div>
+                            <button onClick={() => setIsMenuOpen(false)} className="md:hidden text-gray-500"><i data-lucide="x"></i></button>
+                        </div>
+                        <nav className="p-4 space-y-2 flex-1 overflow-y-auto px-4 custom-scrollbar">
+                            {Object.keys(iconMap).map(tab => (
+                                <button key={tab} onClick={() => handleTabClick(tab)} className={`w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 capitalize transition-all duration-200 ${activeTab === tab ? 'bg-gradient-to-r from-brand to-brand-hover text-white shadow-neon font-bold' : 'text-gray-400 hover:bg-dark-800 hover:text-white'}`}>
+                                    <i data-lucide={iconMap[tab]} width={20} className={activeTab === tab ? 'text-white' : ''}></i> {tab}
+                                </button>
+                            ))}
+                        </nav>
+                        <div className="p-4 border-t border-dark-800 space-y-2 bg-dark-900">
+                            <button onClick={()=>actions.updatePin(user.id)} className="w-full text-left px-4 py-3 text-sm text-gray-400 hover:text-brand transition flex gap-3 items-center bg-dark-800/50 rounded-lg"><i data-lucide="lock" width={18}></i> Change PIN</button>
+                            <button onClick={actions.logout} className="w-full text-left px-4 py-3 text-sm text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 rounded-lg transition flex gap-3 items-center"><i data-lucide="log-out" width={18}></i> Logout</button>
+                        </div>
+                    </div>
+                    
+                    {/* Main Content */}
+                    <div className="flex-1 p-4 md:p-8 overflow-y-auto h-screen w-full relative">
+                        {/* Mobile Header */}
+                        <div className="md:hidden flex items-center justify-between mb-8 bg-dark-800/80 backdrop-blur p-4 rounded-2xl sticky top-0 z-30 border border-dark-700 shadow-lg">
+                            <button onClick={() => setIsMenuOpen(true)} className="text-white bg-dark-700 p-2 rounded-lg"><i data-lucide="menu"></i></button>
+                            <span className="font-bold text-white capitalize text-lg">{activeTab}</span>
+                            <div className="w-8"></div>
+                        </div>
+                        
+                        {activeTab === 'overview' && <OverviewTab transactions={transactions} users={users} returns={returns} products={products} expenses={expenses} />}
+                        {activeTab === 'popular' && <PopularItemsTab transactions={transactions} />}
+                        
+                        {activeTab === 'history' && (
+                            <div className="glass-card rounded-2xl overflow-hidden fade-in border border-dark-700">
+                                <div className="p-6 border-b border-dark-700">
+                                    <h3 className="text-xl font-bold text-white">Sales History</h3>
+                                    <p className="text-sm text-gray-500">Manage and edit past transactions</p>
+                                </div>
+                                <table className="w-full text-left"><thead className="bg-dark-800"><tr><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Date</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Staff</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Total</th><th className="p-5 text-gray-400 text-xs uppercase tracking-wider">Action</th></tr></thead>
+                                    <tbody className="divide-y divide-dark-700/50">{transactions.map(tx => (<tr key={tx.id} className="hover:bg-dark-800/50 transition"><td className="p-5 text-gray-300">{tx.date}</td><td className="p-5 text-white font-semibold">{tx.employeeName}</td><td className="p-5 font-bold text-brand">₹{tx.total}</td><td className="p-5"><button onClick={()=>setEditingTx(tx)} className="bg-brand/10 hover:bg-brand text-brand hover:text-white px-4 py-1.5 rounded-lg text-sm font-bold transition border border-brand/20 flex items-center gap-2"><i data-lucide="edit-2" width="14"></i> Edit</button></td></tr>))}</tbody>
+                                </table>
+                            </div>
+                        )}
+                        
+                        {activeTab === 'returns' && <ReturnsTab returns={returns} products={products} users={users} actions={actions} expenses={expenses} />}
+                        {activeTab === 'expenses' && <ExpensesTab expenses={expenses} actions={actions} />}
+                        {activeTab === 'employees' && <EmployeesTab users={users} actions={actions} />}
+                        {activeTab === 'menu' && <MenuTab products={products} actions={actions} />}
+                    </div>
+                </div>
+            );
+        };
+
+        // 11. MAIN APP (LOGIC CHANGED TO LOCALSTORAGE ONLY)
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [toast, setToast] = useState(null);
+
+            // --- INITIAL DATA SEEDING ---
+            const defaultData = {
+                users: [{id: 1, name: 'Admin', pin: '0000', role: 'admin', commission: 0, locked: 0}],
+                products: [{id: 1, name: 'Vanilla Scoop', price: 50, image: ''}, {id: 2, name: 'Chocolate Scoop', price: 60, image: ''}],
+                transactions: [],
+                expenses: [],
+                returns: []
+            };
+
+            // Initialize State from LocalStorage
+            const [data, setData] = useState(() => {
+                const stored = localStorage.getItem('mpos_offline_data');
+                return stored ? JSON.parse(stored) : defaultData;
+            });
+
+            // --- SESSION PERSISTENCE LOGIC ---
+            const persistUser = (userData) => {
+                setUser(userData);
+                if (userData) {
+                    localStorage.setItem('mpos_user_session', JSON.stringify(userData));
+                } else {
+                    localStorage.removeItem('mpos_user_session');
+                }
+            };
+
+            // --- OFFLINE API CALL SIMULATOR ---
+            const offlineApiCall = (action, payload) => {
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        let currentData = JSON.parse(localStorage.getItem('mpos_offline_data')) || defaultData;
+                        let result = { status: 'success' };
+                        let newId = Date.now();
+
+                        try {
+                            switch(action) {
+                                case 'save_transaction':
+                                    const newTx = { ...payload, id: newId, date: new Date().toLocaleString() };
+                                    currentData.transactions.unshift(newTx);
+                                    result.inserted_id = newId;
+                                    break;
+                                case 'add_product':
+                                    currentData.products.push({ ...payload, id: newId });
+                                    break;
+                                case 'delete_product':
+                                    currentData.products = currentData.products.filter(p => p.id !== payload.id);
+                                    break;
+                                case 'add_user':
+                                    currentData.users.push({ ...payload, id: newId, locked: 0 });
+                                    break;
+                                case 'delete_user':
+                                    currentData.users = currentData.users.filter(u => u.id !== payload.id);
+                                    break;
+                                case 'toggle_lock':
+                                    currentData.users = currentData.users.map(u => u.id === payload.id ? { ...u, locked: u.locked ? 0 : 1 } : u);
+                                    break;
+                                case 'add_expense':
+                                    currentData.expenses.unshift({ ...payload, id: newId, date: new Date().toLocaleString() });
+                                    break;
+                                case 'edit_expense':
+                                    currentData.expenses = currentData.expenses.map(e => e.id === payload.id ? { ...e, description: payload.desc, amount: payload.amount } : e);
+                                    break;
+                                case 'delete_expense':
+                                    currentData.expenses = currentData.expenses.filter(e => e.id !== payload.id);
+                                    break;
+                                case 'add_return':
+                                    currentData.returns.unshift({ ...payload, id: newId, date: new Date().toLocaleString() });
+                                    result.inserted_id = newId;
+                                    break;
+                                case 'delete_return':
+                                    currentData.returns = currentData.returns.filter(r => r.id !== payload.id);
+                                    break;
+                                case 'update_pin':
+                                    currentData.users = currentData.users.map(u => u.id === payload.id ? { ...u, pin: payload.pin } : u);
+                                    break;
+                                case 'update_commission':
+                                    currentData.users = currentData.users.map(u => u.id === payload.id ? { ...u, commission: payload.commission } : u);
+                                    break;
+                                case 'update_transaction':
+                                    currentData.transactions = currentData.transactions.map(t => t.id === payload.id ? { ...t, items: payload.items, total: payload.total } : t);
+                                    break;
+                            }
+                            setData(currentData);
+                            localStorage.setItem('mpos_offline_data', JSON.stringify(currentData));
+                            resolve(result);
+                        } catch (e) {
+                            reject({ status: 'error', message: e.message });
+                        }
+                    }, 100); // Simulated delay
+                });
+            };
+
+            // --- CHECK FOR SAVED SESSION ON MOUNT ---
+            useEffect(() => {
+                const storedUserStr = localStorage.getItem('mpos_user_session');
+                if (storedUserStr) {
+                    try {
+                        const storedUser = JSON.parse(storedUserStr);
+                        setUser(storedUser);
+                    } catch (e) {
+                        localStorage.removeItem('mpos_user_session');
+                    }
+                }
+                setLoading(false);
+            }, []);
+
+            // Local Login Handler
+            const handleLogin = (name, pin) => {
+                const foundUser = data.users.find(u => u.name === name && u.pin === pin);
+                if (foundUser) {
+                    persistUser(foundUser);
+                    setError('');
+                } else {
+                    setError('Invalid User or PIN');
+                }
+            };
+
+            const actions = {
+                logout: () => persistUser(null),
+                addProduct: (p) => offlineApiCall('add_product', p),
+                deleteProduct: (id) => offlineApiCall('delete_product', {id}),
+                addUser: (u) => offlineApiCall('add_user', {name: u.name, pin: u.pin, role: 'staff', commission: u.comm}),
+                deleteUser: (id) => offlineApiCall('delete_user', {id}),
+                toggleLock: (id) => offlineApiCall('toggle_lock', {id}),
+                addExpense: (e) => offlineApiCall('add_expense', {desc: e.desc, amount: e.amt}),
+                editExpense: (e) => offlineApiCall('edit_expense', e),
+                deleteExpense: (id) => offlineApiCall('delete_expense', {id}),
+                addReturn: (r) => offlineApiCall('add_return', r),
+                deleteReturn: (id) => offlineApiCall('delete_return', {id}),
+                updatePin: (id) => { const p=prompt("New PIN"); if(p) offlineApiCall('update_pin', {id, pin:p}); },
+                updateCommission: (id) => { const c=prompt("Comm %"); if(c) offlineApiCall('update_commission', {id, commission:c}); },
+                updateTransaction: (id, items, total) => offlineApiCall('update_transaction', {id, items, total})
+            };
+
+            if(loading) return <div id="loading-screen"><div className="w-16 h-16 border-4 border-brand border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-brand font-bold text-xl tracking-widest">LOADING</p></div>;
+            if(!user) return <Login onLogin={handleLogin} users={data.users} apiError={error} />;
+
+            return (
+                <>
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={()=>setToast(null)} />}
+                    {user.role === 'admin' ? 
+                        <AdminDashboard user={user} {...data} actions={actions} /> : 
+                        <POS user={user} {...data} onLogout={()=>persistUser(null)} onCheckout={(i,t) => offlineApiCall('save_transaction', {employeeName:user.name, items:i, total:t})} onUpdateTransaction={actions.updateTransaction} />
+                    }
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
