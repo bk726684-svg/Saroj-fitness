@@ -887,7 +887,10 @@
                                     currentData.expenses.unshift({ ...payload, id: newId, date: new Date().toLocaleString() });
                                     break;
                                 case 'edit_expense':
-                                    currentData.expenses = currentData.expenses.map(e => e.id === payload.id ? { ...e, description: payload.desc, amount: payload.amount } : e);
+                                    // Fixed: Ensure payload.id matches the structure passed from component
+                                    if(payload && payload.id) {
+                                        currentData.expenses = currentData.expenses.map(e => e.id === payload.id ? { ...e, description: payload.desc, amount: payload.amount } : e);
+                                    }
                                     break;
                                 case 'delete_expense':
                                     currentData.expenses = currentData.expenses.filter(e => e.id !== payload.id);
@@ -951,8 +954,9 @@
                 addUser: (u) => offlineApiCall('add_user', {name: u.name, pin: u.pin, role: 'staff', commission: u.comm}),
                 deleteUser: (id) => offlineApiCall('delete_user', {id}),
                 toggleLock: (id) => offlineApiCall('toggle_lock', {id}),
-                addExpense: (e) => offlineApiCall('add_expense', {desc: e.desc, amount: e.amt}),
-                editExpense: (e) => offlineApiCall('edit_expense', e),
+                addExpense: (e) => offlineApiCall('add_expense', e),
+                // FIXED: editExpense now handles id and payload separately to match the component call
+                editExpense: (id, payload) => offlineApiCall('edit_expense', {id, ...payload}),
                 deleteExpense: (id) => offlineApiCall('delete_expense', {id}),
                 addReturn: (r) => offlineApiCall('add_return', r),
                 deleteReturn: (id) => offlineApiCall('delete_return', {id}),
